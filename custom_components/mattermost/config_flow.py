@@ -35,10 +35,15 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     
     Data has the keys from CONFIG_SCHEMA with values provided by the user.
     """
+    # Parse the URL to extract components for the driver
+    from urllib.parse import urlparse
+    parsed_url = urlparse(data[CONF_URL] if data[CONF_URL].startswith(('http://', 'https://')) else f'https://{data[CONF_URL]}')
+    
     client = Driver({
-        "url": data[CONF_URL],
+        "url": parsed_url.hostname,
+        "scheme": parsed_url.scheme,
+        "port": parsed_url.port or (443 if parsed_url.scheme == 'https' else 80),
         "token": data[CONF_API_KEY],
-        "scheme": "https",
         "timeout": 30,
         "request_timeout": 30,
     })

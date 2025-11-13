@@ -43,10 +43,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     config = entry.data
 
     try:
+        # Parse the URL to extract components for the driver
+        from urllib.parse import urlparse
+        parsed_url = urlparse(config[CONF_URL] if config[CONF_URL].startswith(('http://', 'https://')) else f'https://{config[CONF_URL]}')
+        
         client = Driver({
-            "url": config[CONF_URL],
+            "url": parsed_url.hostname,
+            "scheme": parsed_url.scheme,
+            "port": parsed_url.port or (443 if parsed_url.scheme == 'https' else 80),
             "token": config[CONF_API_KEY],
-            "scheme": "https",
             "timeout": 30,
             "request_timeout": 30,
         })

@@ -32,9 +32,11 @@ This Home Assistant component provides notification functionality for Mattermost
    - Go to Configuration → Integrations
    - Add "Mattermost" integration
    - Provide:
-     - Mattermost Server URL (e.g., `https://your-mattermost-server.com`)
+     - Mattermost Server URL (e.g., `https://chat.company.com` or `192.168.1.100:8065`)
      - Bot Token (from step 1)
      - Default Channel (e.g., `general` or `notifications`)
+     
+   **Note**: For the server URL, you can provide either a full URL like `https://chat.company.com` or just the hostname/IP like `192.168.1.100:8065` (HTTPS will be assumed).
 
 ## Usage
 
@@ -132,7 +134,10 @@ data:
 
 ### Integration Setup
 
-- **url**: Your Mattermost server URL (e.g., `https://chat.company.com`)
+- **url**: Your Mattermost server URL. Can be:
+  - Full URL: `https://chat.company.com` or `http://192.168.1.100:8065`  
+  - Hostname/IP with port: `192.168.1.100:8065` (HTTPS assumed)
+  - Just hostname: `chat.company.com` (HTTPS and default port assumed)
 - **api_key**: Bot token from your Mattermost bot account
 - **default_channel**: Default channel name for notifications (without #)
 
