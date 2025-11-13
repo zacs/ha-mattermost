@@ -49,10 +49,7 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
     })
 
     try:
-        # Test connection by logging in
-        await hass.async_add_executor_job(client.login)
-        
-        # Get user info to use as a title
+        # Test connection by getting user info (no need to login with token)
         user_info = await hass.async_add_executor_job(client.users.get_user, "me")
         username = user_info.get("username", "Mattermost")
         
@@ -87,10 +84,11 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
             pass
 
 
-class MattermostConfigFlow(ConfigFlow, domain=DOMAIN):
+class MattermostConfigFlow(ConfigFlow):
     """Handle a config flow for Mattermost."""
-
+    
     VERSION = 1
+    DOMAIN = DOMAIN
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None

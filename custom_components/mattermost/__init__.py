@@ -56,8 +56,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "request_timeout": 30,
         })
         
-        # Test connection by logging in
-        await hass.async_add_executor_job(client.login)
+        # Test connection by getting user info (no need to login with token)
+        await hass.async_add_executor_job(client.users.get_user, "me")
         
     except (InvalidOrMissingParameters, NotEnoughPermissions, ResourceNotFound) as err:
         _LOGGER.error("Failed to connect to Mattermost: %s", err)
