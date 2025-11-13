@@ -15,7 +15,6 @@ This Home Assistant component provides notification functionality for Mattermost
 
 - A Mattermost server (self-hosted or cloud)
 - A bot token with appropriate permissions
-- Python `mattermostdriver` library (automatically installed)
 
 ## Setup
 
