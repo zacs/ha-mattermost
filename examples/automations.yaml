@@ -1,0 +1,225 @@
+# Example Home Assistant automations using the Mattermost notification component
+
+# Motion detection with security camera image
+motion_alert_with_image:
+  alias: "Motion Alert with Camera Image"
+  trigger:
+    platform: state
+    entity_id: binary_sensor.front_door_motion
+    to: "on"
+  action:
+    - service: camera.snapshot
+      target:
+        entity_id: camera.front_door
+      data:
+        filename: "/config/www/motion_snapshot.jpg"
+    - service: notify.mattermost
+      data:
+        title: "🚨 Motion Detected"
+        message: "Motion detected at front door"
+        target: "security"
+        data:
+          file:
+            path: "/config/www/motion_snapshot.jpg"
+          attachments:
+            - color: "#ff0000"
+              author_name: "Home Assistant Security"
+              title: "Security Alert"
+              fields:
+                - title: "Location"
+                  value: "Front Door"
+                  short: true
+                - title: "Time"
+                  value: "{{ now().strftime('%H:%M:%S') }}"
+                  short: true
+
+# Daily weather report with image
+daily_weather_report:
+  alias: "Daily Weather Report"
+  trigger:
+    platform: time
+    at: "07:00:00"
+  action:
+    - service: notify.mattermost
+      data:
+        title: "🌤️ Daily Weather Report"
+        message: "Good morning! Here's today's weather forecast."
+        target: "general"
+        data:
+          attachments:
+            - color: "#87CEEB"
+              author_name: "Home Assistant Weather"
+              title: "Today's Forecast"
+              text: |
+                Current: {{ states('sensor.temperature') }}°C
+                Condition: {{ states('weather.home') }}
+                Humidity: {{ states('sensor.humidity') }}%
+              fields:
+                - title: "High"
+                  value: "{{ state_attr('weather.home', 'temperature') }}°C"
+                  short: true
+                - title: "Low"
+                  value: "{{ state_attr('weather.home', 'templow') }}°C"
+                  short: true
+              image_url: "https://example.com/weather-radar.png"
+
+# System status monitoring
+system_status_alert:
+  alias: "System Status Alert"
+  trigger:
+    platform: numeric_state
+    entity_id: sensor.processor_use
+    above: 90
+  action:
+    - service: notify.mattermost
+      data:
+        title: "⚠️ High CPU Usage Alert"
+        message: "System CPU usage is critically high"
+        target: "monitoring"
+        data:
+          attachments:
+            - color: "#ff9900"
+              author_name: "Home Assistant Monitoring"
+              title: "Performance Alert"
+              text: "CPU usage has exceeded 90% threshold"
+              fields:
+                - title: "Current CPU"
+                  value: "{{ states('sensor.processor_use') }}%"
+                  short: true
+                - title: "Memory Usage"
+                  value: "{{ states('sensor.memory_use_percent') }}%"
+                  short: true
+                - title: "Load Average"
+                  value: "{{ states('sensor.load_1m') }}"
+                  short: false
+              footer: "System Performance Monitor"
+
+# Device battery low alert
+battery_low_alert:
+  alias: "Low Battery Alert"
+  trigger:
+    platform: numeric_state
+    entity_id: 
+      - sensor.phone_battery_level
+      - sensor.tablet_battery_level
+    below: 20
+  action:
+    - service: notify.mattermost
+      data:
+        title: "🔋 Low Battery Warning"
+        message: "Device battery is running low"
+        target: "notifications"
+        data:
+          attachments:
+            - color: "#ff6600"
+              author_name: "Home Assistant"
+              title: "Battery Alert"
+              text: "{{ trigger.to_state.attributes.friendly_name }} battery is at {{ trigger.to_state.state }}%"
+              fields:
+                - title: "Device"
+                  value: "{{ trigger.to_state.attributes.friendly_name }}"
+                  short: true
+                - title: "Battery Level"
+                  value: "{{ trigger.to_state.state }}%"
+                  short: true
+
+# Security system armed/disarmed
+security_status_change:
+  alias: "Security System Status"
+  trigger:
+    platform: state
+    entity_id: alarm_control_panel.home_alarm
+  action:
+    - service: notify.mattermost
+      data:
+        title: "🛡️ Security System Update"
+        message: "Home security system status changed"
+        target: "security"
+        data:
+          attachments:
+            - color: >
+                {% if trigger.to_state.state == 'armed_away' %}
+                  #ff0000
+                {% elif trigger.to_state.state == 'armed_home' %}
+                  #ff9900
+                {% else %}
+                  #00ff00
+                {% endif %}
+              author_name: "Home Assistant Security"
+              title: "Alarm Status Change"
+              text: "Status changed from {{ trigger.from_state.state }} to {{ trigger.to_state.state }}"
+              fields:
+                - title: "Previous State"
+                  value: "{{ trigger.from_state.state | title }}"
+                  short: true
+                - title: "Current State"
+                  value: "{{ trigger.to_state.state | title }}"
+                  short: true
+                - title: "Changed At"
+                  value: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+                  short: false
+
+# Automation failure notification
+automation_failed:
+  alias: "Automation Failure Alert"
+  trigger:
+    platform: event
+    event_type: automation_triggered
+    event_data:
+      entity_id: automation.important_automation
+  condition:
+    condition: template
+    value_template: "{{ trigger.event.data.result == false }}"
+  action:
+    - service: notify.mattermost
+      data:
+        title: "❌ Automation Failed"
+        message: "An important automation has failed to execute"
+        target: "alerts"
+        data:
+          attachments:
+            - color: "#cc0000"
+              author_name: "Home Assistant System"
+              title: "System Error"
+              text: "{{ trigger.event.data.entity_id }} failed to execute properly"
+              fields:
+                - title: "Automation"
+                  value: "{{ trigger.event.data.entity_id }}"
+                  short: false
+                - title: "Error Time"
+                  value: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+                  short: true
+              footer: "Check Home Assistant logs for details"
+
+# Welcome home message with house status
+welcome_home:
+  alias: "Welcome Home Status"
+  trigger:
+    platform: state
+    entity_id: person.family_member
+    to: "home"
+  action:
+    - service: notify.mattermost
+      data:
+        title: "🏠 Welcome Home!"
+        message: "{{ trigger.to_state.attributes.friendly_name }} has arrived home"
+        target: "family"
+        data:
+          attachments:
+            - color: "#36a64f"
+              author_name: "Home Assistant"
+              title: "Home Status"
+              text: "Current house status and recent activity"
+              fields:
+                - title: "Temperature"
+                  value: "{{ states('sensor.indoor_temperature') }}°C"
+                  short: true
+                - title: "Security"
+                  value: "{{ states('alarm_control_panel.home_alarm') | title }}"
+                  short: true
+                - title: "Lights On"
+                  value: "{{ states.light | selectattr('state', 'equalto', 'on') | list | count }}"
+                  short: true
+                - title: "Doors Locked"
+                  value: "{{ states.lock | selectattr('state', 'equalto', 'locked') | list | count }}/{{ states.lock | list | count }}"
+                  short: true

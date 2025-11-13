@@ -1,0 +1,23 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Setup Mattermost",
+        "description": "Set up your Mattermost notification integration.",
+        "data": {
+          "url": "Mattermost Server URL",
+          "api_key": "Bot Token",
+          "default_channel": "Default Channel"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect",
+      "invalid_auth": "Invalid authentication",
+      "unknown": "Unexpected error"
+    },
+    "abort": {
+      "already_configured": "Account is already configured"
+    }
+  }
+}

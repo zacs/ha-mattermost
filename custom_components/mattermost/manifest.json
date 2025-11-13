@@ -1,0 +1,11 @@
+{
+  "domain": "mattermost",
+  "name": "Mattermost",
+  "codeowners": ["@zacs"],
+  "config_flow": true,
+  "documentation": "https://github.com/zacs/ha-mattermost",
+  "integration_type": "service",
+  "iot_class": "cloud_push",
+  "requirements": ["mattermostdriver>=7.3.2"],
+  "version": "1.0.0"
+}

@@ -1,0 +1,7 @@
+{
+  "name": "Mattermost Notifications",
+  "hacs": "1.6.0",
+  "domains": ["mattermost"],
+  "iot_class": "Cloud Push",
+  "homeassistant": "2023.1.0"
+}
