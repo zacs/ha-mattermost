@@ -4,9 +4,9 @@
   "codeowners": ["@zacs"],
   "config_flow": true,
   "documentation": "https://github.com/zacs/ha-mattermost",
-  "issue_tracker": "https://github.com/zacs/ha-mattermost/issues",
   "integration_type": "service",
   "iot_class": "local_push",
+  "issue_tracker": "https://github.com/zacs/ha-mattermost/issues",
   "requirements": [],
   "version": "1.0.0"
 }

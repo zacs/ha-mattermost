@@ -7,6 +7,7 @@ import os
 from urllib.parse import urlparse
 
 import aiohttp
+import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_API_KEY, CONF_URL, CONF_NAME, Platform
@@ -14,6 +15,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.helpers import discovery
 from homeassistant.helpers.typing import ConfigType
+import homeassistant.helpers.config_validation as cv
 
 from .const import (
     CONF_DEFAULT_CHANNEL,
@@ -26,6 +28,9 @@ from .const import (
 _LOGGER = logging.getLogger(__name__)
 
 PLATFORMS = [Platform.NOTIFY]
+
+# Config entry only - no YAML configuration supported
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 
 class MattermostHTTPClient:
