@@ -7,12 +7,7 @@ import os
 from typing import Any
 from urllib.parse import urlparse
 
-from mattermostdriver import Driver
-from mattermostdriver.exceptions import (
-    InvalidOrMissingParameters,
-    NotEnoughPermissions,
-    ResourceNotFound,
-)
+import aiohttp
 import voluptuous as vol
 
 from homeassistant.components.notify import (
@@ -48,6 +43,8 @@ from .const import (
     ATTR_USERNAME,
     CONF_DEFAULT_CHANNEL,
     DATA_CLIENT,
+    DATA_HASS_CONFIG,
+    DOMAIN,
     MATTERMOST_DATA,
 )
 
@@ -99,18 +96,44 @@ DATA_SCHEMA = vol.All(
 )
 
 
-async def async_get_service(
+def get_service(
     hass: HomeAssistant,
     config: ConfigType,
     discovery_info: DiscoveryInfoType | None = None,
 ) -> MattermostNotificationService | None:
     """Set up the Mattermost notification service."""
-    if discovery_info:
-        return MattermostNotificationService(
-            hass,
-            discovery_info[MATTERMOST_DATA][DATA_CLIENT],
-            discovery_info,
-        )
+    _LOGGER.info("get_service called with discovery_info: %s", 
+                 "present" if discovery_info else "None")
+    
+    if discovery_info is None:
+        _LOGGER.debug("No discovery info, looking for existing config entries")
+        # Get the config entry data
+        for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
+            if DATA_CLIENT in entry_data:
+                _LOGGER.info("Found Mattermost config entry data, creating service")
+                service = MattermostNotificationService(
+                    hass,
+                    entry_data[DATA_CLIENT],
+                    entry_data[DATA_HASS_CONFIG],
+                )
+                _LOGGER.info("Successfully created MattermostNotificationService, returning service")
+                return service
+        _LOGGER.warning("No Mattermost config entry data found")
+    else:
+        _LOGGER.debug("Using discovery info to set up service")
+        # Discovery info contains the data directly
+        if DATA_CLIENT in discovery_info:
+            _LOGGER.info("Found Mattermost data in discovery info, creating service")
+            service = MattermostNotificationService(
+                hass,
+                discovery_info[DATA_CLIENT],
+                discovery_info[DATA_HASS_CONFIG],
+            )
+            _LOGGER.info("Successfully created MattermostNotificationService, returning service")
+            return service
+        _LOGGER.warning("No Mattermost data in discovery info, keys available: %s", list(discovery_info.keys()) if discovery_info else "None")
+    
+    _LOGGER.error("Failed to create Mattermost notification service")
     return None
 
 
@@ -133,13 +156,58 @@ class MattermostNotificationService(BaseNotificationService):
     def __init__(
         self,
         hass: HomeAssistant,
-        client: Driver,
+        client,  # MattermostHTTPClient from __init__.py
         config: dict[str, str],
     ) -> None:
         """Initialize."""
+        _LOGGER.info("Initializing MattermostNotificationService")
         self._hass = hass
         self._client = client
         self._config = config
+        _LOGGER.debug("MattermostNotificationService initialized with config: %s", 
+                     {k: "***" if "token" in k.lower() else v for k, v in config.items()})
+        
+        # Debug: Check if we can access the service registry
+        try:
+            _LOGGER.debug("Service registry domain services: %s", 
+                         list(hass.services.async_services_for_domain("notify")))
+        except Exception as e:
+            _LOGGER.debug("Could not access service registry: %s", e)
+
+    @property
+    def name(self) -> str:
+        """Return the name of the notification service."""
+        return "mattermost"
+    
+    async def async_setup(self, hass, service_name, target_service_name_prefix):
+        """Store the data for the notify service."""
+        _LOGGER.info("async_setup called with service_name=%s, target_service_name_prefix=%s", 
+                     service_name, target_service_name_prefix)
+        try:
+            # Call parent setup
+            result = await super().async_setup(hass, service_name, target_service_name_prefix)
+            _LOGGER.info("Parent async_setup completed successfully")
+            return result
+        except Exception as e:
+            _LOGGER.error("Error in async_setup: %s", e, exc_info=True)
+            raise
+    
+    async def async_register_services(self):
+        """Create or update the notify services."""
+        _LOGGER.info("async_register_services called")
+        try:
+            # Call parent registration
+            result = await super().async_register_services()
+            _LOGGER.info("Parent async_register_services completed successfully")
+            
+            # Check if service was registered
+            notify_services = self.hass.services.async_services_for_domain("notify")
+            _LOGGER.info("Notify services after registration: %s", list(notify_services))
+            
+            return result
+        except Exception as e:
+            _LOGGER.error("Error in async_register_services: %s", e, exc_info=True)
+            raise
 
     async def async_send_message(self, message: str, **kwargs: Any) -> None:
         """Send a message to Mattermost."""
@@ -186,25 +254,21 @@ class MattermostNotificationService(BaseNotificationService):
         attachments: list[dict] | None = None,
     ) -> None:
         """Send a text-only message to Mattermost."""
-        full_message = f"**{title}**\n\n{message}" if title else message
+        # Build the message text
+        if title and message:
+            full_message = f"**{title}**\n\n{message}"
+        elif title:
+            full_message = f"**{title}**"
+        elif message:
+            full_message = message
+        else:
+            # No title or message - only allow if we have attachments
+            if attachments:
+                full_message = ""  # Empty message with attachments is valid
+            else:
+                _LOGGER.warning("Skipping notification: no message, title, or attachments provided")
+                return
         
-        # Prepare post data
-        post_data = {
-            "message": full_message,
-            "props": {
-                "from_webhook": "true",
-            }
-        }
-        
-        # Add default author info to attachments if not provided
-        if attachments:
-            for attachment in attachments:
-                if ATTR_AUTHOR_NAME not in attachment:
-                    attachment[ATTR_AUTHOR_NAME] = "Home Assistant"
-                if ATTR_AUTHOR_ICON not in attachment:
-                    attachment[ATTR_AUTHOR_ICON] = "https://www.home-assistant.io/images/favicon-192x192-full.png"
-            post_data["props"]["attachments"] = attachments
-
         for target in targets:
             try:
                 # Get channel ID
@@ -213,12 +277,23 @@ class MattermostNotificationService(BaseNotificationService):
                     _LOGGER.error("Could not find channel: %s", target)
                     continue
 
-                post_data["channel_id"] = channel_id
-                
-                # Send the message
-                await self._hass.async_add_executor_job(
-                    self._client.posts.create_post, options=post_data
-                )
+                # Prepare post data
+                post_kwargs = {}
+                if attachments:
+                    # Add default author info to attachments if not specified
+                    processed_attachments = []
+                    for attachment in attachments:
+                        attachment_copy = attachment.copy()
+                        if "author_name" not in attachment_copy:
+                            attachment_copy["author_name"] = "Home Assistant"
+                        if "author_icon" not in attachment_copy:
+                            attachment_copy["author_icon"] = "https://www.home-assistant.io/images/favicon-192x192-full.png"
+                        processed_attachments.append(attachment_copy)
+                    
+                    post_kwargs["props"] = {"attachments": processed_attachments}
+
+                # Send the message using our HTTP client
+                await self._client.post_message(channel_id, full_message, **post_kwargs)
                 
             except Exception as err:
                 _LOGGER.error("Failed to send message to %s: %s", target, err)
@@ -239,8 +314,6 @@ class MattermostNotificationService(BaseNotificationService):
             _LOGGER.error("File does not exist: %s", file_path)
             return
 
-        filename = os.path.basename(file_path)
-        
         for target in targets:
             try:
                 # Get channel ID
@@ -249,34 +322,9 @@ class MattermostNotificationService(BaseNotificationService):
                     _LOGGER.error("Could not find channel: %s", target)
                     continue
 
-                # Upload the file
-                with open(file_path, "rb") as file_obj:
-                    file_upload = await self._hass.async_add_executor_job(
-                        self._client.files.upload_file,
-                        channel_id,
-                        {"files": (filename, file_obj)}
-                    )
-                
-                file_id = file_upload["file_infos"][0]["id"]
-                
-                # Create post with file attachment
+                # Upload the file using our HTTP client
                 full_message = f"**{title}**\n\n{message}" if title else message
-                post_data = {
-                    "channel_id": channel_id,
-                    "message": full_message,
-                    "file_ids": [file_id],
-                    "props": {
-                        "from_webhook": "true",
-                        "attachments": [{
-                            "author_name": "Home Assistant",
-                            "author_icon": "https://www.home-assistant.io/images/favicon-192x192-full.png"
-                        }]
-                    }
-                }
-                
-                await self._hass.async_add_executor_job(
-                    self._client.posts.create_post, options=post_data
-                )
+                await self._client.upload_file(channel_id, file_path, full_message)
                 
             except Exception as err:
                 _LOGGER.error("Failed to send file to %s: %s", target, err)
@@ -319,6 +367,9 @@ class MattermostNotificationService(BaseNotificationService):
             _LOGGER.error("Failed to download file from %s: %s", url, err)
             return
 
+        # Save to temporary file and upload using our HTTP client
+        import tempfile
+        
         for target in targets:
             try:
                 # Get channel ID
@@ -327,58 +378,46 @@ class MattermostNotificationService(BaseNotificationService):
                     _LOGGER.error("Could not find channel: %s", target)
                     continue
 
-                # Upload the file from memory
-                import io
-                file_obj = io.BytesIO(file_content)
-                file_upload = await self._hass.async_add_executor_job(
-                    self._client.files.upload_file,
-                    channel_id,
-                    {"files": (filename, file_obj)}
-                )
+                # Create temporary file
+                with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{filename}") as temp_file:
+                    temp_file.write(file_content)
+                    temp_file_path = temp_file.name
                 
-                file_id = file_upload["file_infos"][0]["id"]
-                
-                # Create post with file attachment
-                full_message = f"**{title}**\n\n{message}" if title else message
-                post_data = {
-                    "channel_id": channel_id,
-                    "message": full_message,
-                    "file_ids": [file_id],
-                    "props": {
-                        "from_webhook": "true",
-                        "attachments": [{
-                            "author_name": "Home Assistant",
-                            "author_icon": "https://www.home-assistant.io/images/favicon-192x192-full.png"
-                        }]
-                    }
-                }
-                
-                await self._hass.async_add_executor_job(
-                    self._client.posts.create_post, options=post_data
-                )
+                try:
+                    # Upload using our HTTP client
+                    full_message = f"**{title}**\n\n{message}" if title else message
+                    await self._client.upload_file(channel_id, temp_file_path, full_message)
+                finally:
+                    # Clean up temporary file
+                    try:
+                        os.unlink(temp_file_path)
+                    except OSError:
+                        pass
                 
             except Exception as err:
                 _LOGGER.error("Failed to send remote file to %s: %s", target, err)
 
     async def _async_get_channel_id(self, channel_name: str) -> str | None:
-        """Get channel ID from channel name."""
+        """Get channel ID from channel name or return channel ID if already provided."""
         try:
-            # First, try to get channel by name (assuming it's in the user's team)
-            channel = await self._hass.async_add_executor_job(
-                self._client.channels.get_channel_by_name, channel_name
-            )
-            return channel["id"]
-        except (ResourceNotFound, InvalidOrMissingParameters):
-            try:
-                # If that fails, try to search for the channel
-                channels = await self._hass.async_add_executor_job(
-                    self._client.channels.search_channels, options={"term": channel_name}
-                )
-                for channel in channels:
-                    if channel["name"] == channel_name or channel["display_name"] == channel_name:
-                        return channel["id"]
-            except Exception as err:
-                _LOGGER.warning("Could not search for channel %s: %s", channel_name, err)
-        
-        _LOGGER.error("Could not find channel: %s", channel_name)
-        return None
+            # Remove # prefix if present
+            channel_name = channel_name.lstrip('#')
+            
+            # Check if it's already a channel ID (Mattermost channel IDs are 26 character alphanumeric strings)
+            if len(channel_name) == 26 and channel_name.isalnum():
+                _LOGGER.debug("Input appears to be a channel ID already: %s", channel_name)
+                return channel_name
+            
+            # Use our HTTP client to get the channel ID from channel name
+            async with aiohttp.ClientSession() as session:
+                channel_id = await self._client._get_channel_id(session, channel_name)
+                if channel_id:
+                    _LOGGER.debug("Resolved channel name '%s' to ID: %s", channel_name, channel_id)
+                    return channel_id
+                else:
+                    _LOGGER.error("Could not resolve channel name: %s", channel_name)
+                    return None
+                    
+        except Exception as err:
+            _LOGGER.error("Could not find channel %s: %s", channel_name, err)
+            return None

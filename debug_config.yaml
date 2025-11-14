@@ -1,0 +1,13 @@
+# Debug configuration for Home Assistant to trace Mattermost integration loading
+# Add this to your configuration.yaml to see detailed logs
+
+logger:
+  default: info
+  logs:
+    custom_components.mattermost: debug
+    homeassistant.components.notify: debug
+    homeassistant.helpers.discovery: debug
+
+# You can also add this temporarily to see all logs:
+# logger:
+#   default: debug

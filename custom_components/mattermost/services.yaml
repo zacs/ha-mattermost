@@ -1,1 +1,33 @@
 # Services for Mattermost integration
+notify:
+  name: Send Mattermost notification
+  description: Send a notification message to Mattermost channels.
+  fields:
+    message:
+      name: Message
+      description: The notification message text to send (can be empty if using attachments).
+      example: "The garage door has been open for 10 minutes."
+      required: true
+      selector:
+        text:
+          multiline: true
+    title:
+      name: Title
+      description: Optional title for the notification message.
+      example: "Your Garage Door Friend"
+      required: false
+      selector:
+        text:
+    target:
+      name: Channel
+      description: Channel name, display name (e.g. 'general', '#general'), or channel ID. Can be a single channel or list of channels.
+      example: ["general", "#alerts", "jgw476jxx7rd5ebefxz7x8h1mo"]
+      required: true
+      selector:
+        text:
+    data:
+      name: Additional Data
+      description: Additional options like file attachments, message attachments, or formatting options.
+      required: false
+      selector:
+        object:

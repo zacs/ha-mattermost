@@ -1,20 +1,21 @@
 # Mattermost Notification Component for Home Assistant
 
-This Home Assistant component provides notification functionality for Mattermost servers, allowing you to send messages and images to specific channels.
+This Home Assistant custom component provides notification functionality for Mattermost servers using bot token authentication, allowing you to send messages and files to specific channels.
 
 ## Features
 
-- Send text messages to Mattermost channels
-- Upload and share local files
-- Upload remote files from URLs
-- Support for rich message attachments with formatting
-- Uses the bot's configured name and author attribution ("Home Assistant")
-- Config flow setup through the UI
+- **Bot Token Authentication**: Uses Mattermost bot tokens for secure API access
+- **Text Messages**: Send formatted text notifications to Mattermost channels
+- **File Attachments**: Upload and share local or remote files with messages
+- **Multi-Channel Support**: Send notifications to multiple channels simultaneously
+- **Config Flow**: Easy setup through Home Assistant UI
+- **No Dependencies**: Pure HTTP client implementation, no external Python packages required
 
 ## Requirements
 
 - A Mattermost server (self-hosted or cloud)
 - A bot token with appropriate permissions
+- Bot account enabled in your Mattermost instance
 
 ## Setup
 
