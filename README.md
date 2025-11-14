@@ -15,7 +15,7 @@ This Home Assistant custom component provides notification functionality for Mat
 ## Requirements
 
 - A Mattermost server (self-hosted or cloud)
-- A bot token with appropriate permissions (in channels, on team)
+- A bot access token with appropriate permissions
 - Bot account enabled in your Mattermost instance
 
 ## Setup
@@ -34,8 +34,8 @@ This Home Assistant custom component provides notification functionality for Mat
    - Go to Configuration → Integrations
    - Add "Mattermost" integration
    - Provide:
-     - Mattermost Server URL (e.g., `https://chat.company.com` or `192.168.1.100:8065`)
-     - Bot Token (from step 1)
+     - Server URL (e.g., `https://chat.company.com` or `192.168.1.100:8065`)
+     - Bot Access Token (from step 1)
      - Default Channel (e.g., `general` or `notifications`)
      
    **Note**: For the server URL, you can provide either a full URL like `https://chat.company.com` or just the hostname/IP like `192.168.1.100:8065` (HTTPS will be assumed).
@@ -140,7 +140,7 @@ data:
   - Full URL: `https://chat.company.com` or `http://192.168.1.100:8065`  
   - Hostname/IP with port: `192.168.1.100:8065` (HTTPS assumed)
   - Just hostname: `chat.company.com` (HTTPS and default port assumed)
-- **api_key**: Bot token from your Mattermost bot account
+- **api_key**: Bot access token from your Mattermost bot account
 - **default_channel**: Default channel name for notifications (without #)
 
 ### Notification Data Options
