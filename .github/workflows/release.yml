@@ -1,0 +1,49 @@
+name: "Release"
+
+on:
+  release:
+    types:
+      - published
+
+jobs:
+  validate-release:
+    runs-on: "ubuntu-latest"
+    name: "Validate Release"
+    steps:
+      - name: "Checkout"
+        uses: "actions/checkout@v4"
+
+      - name: "HACS Validation"
+        uses: "hacs/action@main"
+        with:
+          category: "integration"
+
+      - name: "Hassfest Validation"
+        uses: "home-assistant/actions/hassfest@master"
+
+      - name: "Setup Python"
+        uses: "actions/setup-python@v4"
+        with:
+          python-version: "3.11"
+
+      - name: "Install dependencies"
+        run: |
+          python3 -m pip install --upgrade pip
+          python3 -m pip install black isort
+
+      - name: "Check code formatting"
+        run: |
+          black --check .
+          isort --check-only .
+
+      - name: "Check integration structure"
+        run: |
+          # Verify required files exist
+          test -f custom_components/mattermost/__init__.py
+          test -f custom_components/mattermost/config_flow.py
+          test -f custom_components/mattermost/const.py
+          test -f custom_components/mattermost/manifest.json
+          test -f custom_components/mattermost/notify.py
+          test -f custom_components/mattermost/services.yaml
+          test -f custom_components/mattermost/translations/en.json
+          echo "✓ All required files present"

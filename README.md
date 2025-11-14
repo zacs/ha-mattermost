@@ -1,20 +1,21 @@
 # Mattermost Notification Component for Home Assistant
 
+[![Validate](https://github.com/zacs/ha-mattermost/actions/workflows/validate.yml/badge.svg)](https://github.com/zacs/ha-mattermost/actions/workflows/validate.yml)
+[![HACS](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
+
 This Home Assistant custom component provides notification functionality for Mattermost servers using bot token authentication, allowing you to send messages and files to specific channels.
 
 ## Features
 
 - **Bot Token Authentication**: Uses Mattermost bot tokens for secure API access
-- **Text Messages**: Send formatted text notifications to Mattermost channels
+- **Text Notifications**: Send formatted text notifications to Mattermost channels
 - **File Attachments**: Upload and share local or remote files with messages
 - **Multi-Channel Support**: Send notifications to multiple channels simultaneously
-- **Config Flow**: Easy setup through Home Assistant UI
-- **No Dependencies**: Pure HTTP client implementation, no external Python packages required
 
 ## Requirements
 
 - A Mattermost server (self-hosted or cloud)
-- A bot token with appropriate permissions
+- A bot token with appropriate permissions (in channels, on team)
 - Bot account enabled in your Mattermost instance
 
 ## Setup
@@ -23,7 +24,7 @@ This Home Assistant custom component provides notification functionality for Mat
    - Go to your Mattermost server
    - Navigate to System Console → Integrations → Bot Accounts
    - Create a new bot account (e.g., "Home Assistant Bot")
-   - Note the bot token generated
+   - Note the bot access token generated
 
 2. **Install the Component:**
    - Place this component in your `custom_components/mattermost/` directory
@@ -41,7 +42,7 @@ This Home Assistant custom component provides notification functionality for Mat
 
 ## Usage
 
-### Basic Text Message
+### Basic Text Notification
 
 ```yaml
 service: notify.mattermost
@@ -67,9 +68,9 @@ service: notify.mattermost
 data:
   message: "System status update"
   target:
-    - "general"
-    - "alerts"
-    - "notifications"
+    - "#general"
+    - "#alerts"
+    - "#notifications"
 ```
 
 ### Send Local File
@@ -104,7 +105,7 @@ data:
 service: notify.mattermost
 data:
   message: "System Status Report"
-  target: "monitoring"
+  target: "#monitoring"
   data:
     attachments:
       - fallback: "System Status: All systems operational"

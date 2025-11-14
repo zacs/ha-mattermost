@@ -13,7 +13,6 @@ nosetests.xml
 coverage.xml
 *.cover
 .hypothesis/
-.pytest_cache/
 
 # Virtual environments
 .env
@@ -49,6 +48,5 @@ home-assistant_v2.db*
 .storage/
 .cloud/
 
-# Test files
-test_*.py
-*_test.py
+# Testing
+.pytest_cache/
