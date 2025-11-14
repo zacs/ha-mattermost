@@ -1,7 +1,5 @@
 {
   "name": "Mattermost Notifications",
   "hacs": "1.6.0",
-  "issue_tracker": "https://github.com/zacs/ha-mattermost/issues",
-  "iot_class": "Cloud Push",
   "homeassistant": "2023.1.0"
 }
