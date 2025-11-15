@@ -91,9 +91,7 @@ DATA_TEXT_ONLY_SCHEMA = vol.Schema(
     }
 )
 
-DATA_SCHEMA = vol.All(
-    vol.Any(DATA_FILE_SCHEMA, DATA_TEXT_ONLY_SCHEMA, None)
-)
+DATA_SCHEMA = vol.All(vol.Any(DATA_FILE_SCHEMA, DATA_TEXT_ONLY_SCHEMA, None))
 
 
 def get_service(
@@ -102,9 +100,11 @@ def get_service(
     discovery_info: DiscoveryInfoType | None = None,
 ) -> MattermostNotificationService | None:
     """Set up the Mattermost notification service."""
-    _LOGGER.info("get_service called with discovery_info: %s", 
-                 "present" if discovery_info else "None")
-    
+    _LOGGER.info(
+        "get_service called with discovery_info: %s",
+        "present" if discovery_info else "None",
+    )
+
     if discovery_info is None:
         _LOGGER.debug("No discovery info, looking for existing config entries")
         # Get the config entry data
@@ -116,7 +116,10 @@ def get_service(
                     entry_data[DATA_CLIENT],
                     entry_data[DATA_HASS_CONFIG],
                 )
-                _LOGGER.info("Successfully created MattermostNotificationService, returning service")
+                _LOGGER.info(
+                    "Successfully created MattermostNotificationService, "
+                    "returning service"
+                )
                 return service
         _LOGGER.warning("No Mattermost config entry data found")
     else:
@@ -129,10 +132,15 @@ def get_service(
                 discovery_info[DATA_CLIENT],
                 discovery_info[DATA_HASS_CONFIG],
             )
-            _LOGGER.info("Successfully created MattermostNotificationService, returning service")
+            _LOGGER.info(
+                "Successfully created MattermostNotificationService, returning service"
+            )
             return service
-        _LOGGER.warning("No Mattermost data in discovery info, keys available: %s", list(discovery_info.keys()) if discovery_info else "None")
-    
+        _LOGGER.warning(
+            "No Mattermost data in discovery info, keys available: %s",
+            list(discovery_info.keys()) if discovery_info else "None",
+        )
+
     _LOGGER.error("Failed to create Mattermost notification service")
     return None
 
@@ -164,13 +172,17 @@ class MattermostNotificationService(BaseNotificationService):
         self._hass = hass
         self._client = client
         self._config = config
-        _LOGGER.debug("MattermostNotificationService initialized with config: %s", 
-                     {k: "***" if "token" in k.lower() else v for k, v in config.items()})
-        
+        _LOGGER.debug(
+            "MattermostNotificationService initialized with config: %s",
+            {k: "***" if "token" in k.lower() else v for k, v in config.items()},
+        )
+
         # Debug: Check if we can access the service registry
         try:
-            _LOGGER.debug("Service registry domain services: %s", 
-                         list(hass.services.async_services_for_domain("notify")))
+            _LOGGER.debug(
+                "Service registry domain services: %s",
+                list(hass.services.async_services_for_domain("notify")),
+            )
         except Exception as e:
             _LOGGER.debug("Could not access service registry: %s", e)
 
@@ -178,20 +190,25 @@ class MattermostNotificationService(BaseNotificationService):
     def name(self) -> str:
         """Return the name of the notification service."""
         return "mattermost"
-    
+
     async def async_setup(self, hass, service_name, target_service_name_prefix):
         """Store the data for the notify service."""
-        _LOGGER.info("async_setup called with service_name=%s, target_service_name_prefix=%s", 
-                     service_name, target_service_name_prefix)
+        _LOGGER.info(
+            "async_setup called with service_name=%s, target_service_name_prefix=%s",
+            service_name,
+            target_service_name_prefix,
+        )
         try:
             # Call parent setup
-            result = await super().async_setup(hass, service_name, target_service_name_prefix)
+            result = await super().async_setup(
+                hass, service_name, target_service_name_prefix
+            )
             _LOGGER.info("Parent async_setup completed successfully")
             return result
         except Exception as e:
             _LOGGER.error("Error in async_setup: %s", e, exc_info=True)
             raise
-    
+
     async def async_register_services(self):
         """Create or update the notify services."""
         _LOGGER.info("async_register_services called")
@@ -199,11 +216,13 @@ class MattermostNotificationService(BaseNotificationService):
             # Call parent registration
             result = await super().async_register_services()
             _LOGGER.info("Parent async_register_services completed successfully")
-            
+
             # Check if service was registered
             notify_services = self.hass.services.async_services_for_domain("notify")
-            _LOGGER.info("Notify services after registration: %s", list(notify_services))
-            
+            _LOGGER.info(
+                "Notify services after registration: %s", list(notify_services)
+            )
+
             return result
         except Exception as e:
             _LOGGER.error("Error in async_register_services: %s", e, exc_info=True)
@@ -236,7 +255,7 @@ class MattermostNotificationService(BaseNotificationService):
             return await self._async_send_local_file_message(
                 file_data[CONF_PATH], targets, message, title
             )
-        
+
         return await self._async_send_remote_file_message(
             file_data[ATTR_URL],
             targets,
@@ -266,9 +285,11 @@ class MattermostNotificationService(BaseNotificationService):
             if attachments:
                 full_message = ""  # Empty message with attachments is valid
             else:
-                _LOGGER.warning("Skipping notification: no message, title, or attachments provided")
+                _LOGGER.warning(
+                    "Skipping notification: no message, title, or attachments provided"
+                )
                 return
-        
+
         for target in targets:
             try:
                 # Get channel ID
@@ -287,14 +308,17 @@ class MattermostNotificationService(BaseNotificationService):
                         if "author_name" not in attachment_copy:
                             attachment_copy["author_name"] = "Home Assistant"
                         if "author_icon" not in attachment_copy:
-                            attachment_copy["author_icon"] = "https://www.home-assistant.io/images/favicon-192x192-full.png"
+                            attachment_copy["author_icon"] = (
+                                "https://www.home-assistant.io/images/"
+                                "favicon-192x192-full.png"
+                            )
                         processed_attachments.append(attachment_copy)
-                    
+
                     post_kwargs["props"] = {"attachments": processed_attachments}
 
                 # Send the message using our HTTP client
                 await self._client.post_message(channel_id, full_message, **post_kwargs)
-                
+
             except Exception as err:
                 _LOGGER.error("Failed to send message to %s: %s", target, err)
 
@@ -325,7 +349,7 @@ class MattermostNotificationService(BaseNotificationService):
                 # Upload the file using our HTTP client
                 full_message = f"**{title}**\n\n{message}" if title else message
                 await self._client.upload_file(channel_id, file_path, full_message)
-                
+
             except Exception as err:
                 _LOGGER.error("Failed to send file to %s: %s", target, err)
 
@@ -345,7 +369,7 @@ class MattermostNotificationService(BaseNotificationService):
             return
 
         filename = _get_filename_from_url(url)
-        
+
         # Import aiohttp here to avoid issues if not available
         try:
             import aiohttp
@@ -355,7 +379,7 @@ class MattermostNotificationService(BaseNotificationService):
             return
 
         session = aiohttp_client.async_get_clientsession(self._hass)
-        
+
         # Fetch the remote file
         auth = aiohttp.BasicAuth(username, password) if username and password else None
 
@@ -369,7 +393,7 @@ class MattermostNotificationService(BaseNotificationService):
 
         # Save to temporary file and upload using our HTTP client
         import tempfile
-        
+
         for target in targets:
             try:
                 # Get channel ID
@@ -379,21 +403,25 @@ class MattermostNotificationService(BaseNotificationService):
                     continue
 
                 # Create temporary file
-                with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{filename}") as temp_file:
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=f"_{filename}"
+                ) as temp_file:
                     temp_file.write(file_content)
                     temp_file_path = temp_file.name
-                
+
                 try:
                     # Upload using our HTTP client
                     full_message = f"**{title}**\n\n{message}" if title else message
-                    await self._client.upload_file(channel_id, temp_file_path, full_message)
+                    await self._client.upload_file(
+                        channel_id, temp_file_path, full_message
+                    )
                 finally:
                     # Clean up temporary file
                     try:
                         os.unlink(temp_file_path)
                     except OSError:
                         pass
-                
+
             except Exception as err:
                 _LOGGER.error("Failed to send remote file to %s: %s", target, err)
 
@@ -401,23 +429,28 @@ class MattermostNotificationService(BaseNotificationService):
         """Get channel ID from channel name or return channel ID if already provided."""
         try:
             # Remove # prefix if present
-            channel_name = channel_name.lstrip('#')
-            
-            # Check if it's already a channel ID (Mattermost channel IDs are 26 character alphanumeric strings)
+            channel_name = channel_name.lstrip("#")
+
+            # Check if it's already a channel ID
+            # (Mattermost channel IDs are 26 character alphanumeric strings)
             if len(channel_name) == 26 and channel_name.isalnum():
-                _LOGGER.debug("Input appears to be a channel ID already: %s", channel_name)
+                _LOGGER.debug(
+                    "Input appears to be a channel ID already: %s", channel_name
+                )
                 return channel_name
-            
+
             # Use our HTTP client to get the channel ID from channel name
             async with aiohttp.ClientSession() as session:
                 channel_id = await self._client._get_channel_id(session, channel_name)
                 if channel_id:
-                    _LOGGER.debug("Resolved channel name '%s' to ID: %s", channel_name, channel_id)
+                    _LOGGER.debug(
+                        "Resolved channel name '%s' to ID: %s", channel_name, channel_id
+                    )
                     return channel_id
                 else:
                     _LOGGER.error("Could not resolve channel name: %s", channel_name)
                     return None
-                    
+
         except Exception as err:
             _LOGGER.error("Could not find channel %s: %s", channel_name, err)
             return None
