@@ -9,7 +9,6 @@ from urllib.parse import urlparse
 
 import aiohttp
 import voluptuous as vol
-
 from homeassistant.components.notify import (
     ATTR_DATA,
     ATTR_TARGET,
@@ -37,7 +36,9 @@ from .const import (
     ATTR_PRETEXT,
     ATTR_TEXT,
     ATTR_THUMB_URL,
-    ATTR_TITLE as CONST_ATTR_TITLE,
+)
+from .const import ATTR_TITLE as CONST_ATTR_TITLE
+from .const import (
     ATTR_TITLE_LINK,
     ATTR_URL,
     ATTR_USERNAME,
