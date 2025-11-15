@@ -101,42 +101,24 @@ def get_service(
     discovery_info: DiscoveryInfoType | None = None,
 ) -> MattermostNotificationService | None:
     """Set up the Mattermost notification service."""
-    _LOGGER.info(
-        "get_service called with discovery_info: %s",
-        "present" if discovery_info else "None",
-    )
-
     if discovery_info is None:
-        _LOGGER.debug("No discovery info, looking for existing config entries")
         # Get the config entry data
         for entry_id, entry_data in hass.data.get(DOMAIN, {}).items():
             if DATA_CLIENT in entry_data:
-                _LOGGER.info("Found Mattermost config entry data, creating service")
-                service = MattermostNotificationService(
+                return MattermostNotificationService(
                     hass,
                     entry_data[DATA_CLIENT],
                     entry_data[DATA_HASS_CONFIG],
                 )
-                _LOGGER.info(
-                    "Successfully created MattermostNotificationService, "
-                    "returning service"
-                )
-                return service
         _LOGGER.warning("No Mattermost config entry data found")
     else:
-        _LOGGER.debug("Using discovery info to set up service")
         # Discovery info contains the data directly
         if DATA_CLIENT in discovery_info:
-            _LOGGER.info("Found Mattermost data in discovery info, creating service")
-            service = MattermostNotificationService(
+            return MattermostNotificationService(
                 hass,
                 discovery_info[DATA_CLIENT],
                 discovery_info[DATA_HASS_CONFIG],
             )
-            _LOGGER.info(
-                "Successfully created MattermostNotificationService, returning service"
-            )
-            return service
         _LOGGER.warning(
             "No Mattermost data in discovery info, keys available: %s",
             list(discovery_info.keys()) if discovery_info else "None",
@@ -173,17 +155,12 @@ class MattermostNotificationService(BaseNotificationService):
         self._hass = hass
         self._client = client
         self._config = config
-        _LOGGER.debug(
-            "MattermostNotificationService initialized with config: %s",
-            {k: "***" if "token" in k.lower() else v for k, v in config.items()},
-        )
+        _LOGGER.debug("MattermostNotificationService initialized")
 
-        # Debug: Check if we can access the service registry
+        # Check service registry access
         try:
-            _LOGGER.debug(
-                "Service registry domain services: %s",
-                list(hass.services.async_services_for_domain("notify")),
-            )
+            notify_services = list(hass.services.async_services_for_domain("notify"))
+            _LOGGER.debug("Available notify services: %d", len(notify_services))
         except Exception as e:
             _LOGGER.debug("Could not access service registry: %s", e)
 
@@ -194,17 +171,10 @@ class MattermostNotificationService(BaseNotificationService):
 
     async def async_setup(self, hass, service_name, target_service_name_prefix):
         """Store the data for the notify service."""
-        _LOGGER.info(
-            "async_setup called with service_name=%s, target_service_name_prefix=%s",
-            service_name,
-            target_service_name_prefix,
-        )
         try:
-            # Call parent setup
             result = await super().async_setup(
                 hass, service_name, target_service_name_prefix
             )
-            _LOGGER.info("Parent async_setup completed successfully")
             return result
         except Exception as e:
             _LOGGER.error("Error in async_setup: %s", e, exc_info=True)
@@ -212,18 +182,8 @@ class MattermostNotificationService(BaseNotificationService):
 
     async def async_register_services(self):
         """Create or update the notify services."""
-        _LOGGER.info("async_register_services called")
         try:
-            # Call parent registration
             result = await super().async_register_services()
-            _LOGGER.info("Parent async_register_services completed successfully")
-
-            # Check if service was registered
-            notify_services = self.hass.services.async_services_for_domain("notify")
-            _LOGGER.info(
-                "Notify services after registration: %s", list(notify_services)
-            )
-
             return result
         except Exception as e:
             _LOGGER.error("Error in async_register_services: %s", e, exc_info=True)
@@ -371,13 +331,8 @@ class MattermostNotificationService(BaseNotificationService):
 
         filename = _get_filename_from_url(url)
 
-        # Import aiohttp here to avoid issues if not available
-        try:
-            import aiohttp
-            from homeassistant.helpers import aiohttp_client
-        except ImportError:
-            _LOGGER.error("aiohttp not available for remote file downloads")
-            return
+        # Get aiohttp session from Home Assistant
+        from homeassistant.helpers import aiohttp_client
 
         session = aiohttp_client.async_get_clientsession(self._hass)
 

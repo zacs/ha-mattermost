@@ -67,7 +67,7 @@ class MattermostHTTPClient:
                         return False
                     _LOGGER.debug("Server connectivity test passed")
 
-                # Now test authentication with the bot token
+                # Test authentication with the bot token
                 async with session.get(
                     f"{self.base_url}/api/v4/users/me",
                     headers=self.headers,
@@ -77,23 +77,15 @@ class MattermostHTTPClient:
                     if response.status == 200:
                         user_data = await response.json()
                         username = user_data.get("username", "unknown")
-                        user_id = user_data.get("id", "unknown")
                         is_bot = user_data.get("is_bot", False)
                         _LOGGER.info(
-                            "Successfully authenticated as bot user: %s "
-                            "(ID: %s, is_bot: %s)",
-                            username,
-                            user_id,
-                            is_bot,
+                            "Successfully authenticated as bot user: %s", username
                         )
 
-                        # Check if it's actually a bot account
                         if not is_bot:
                             _LOGGER.warning(
-                                "Authenticated user is not marked as a bot account. "
-                                "Consider converting to bot account."
+                                "User account is not marked as bot. Consider using a bot account."
                             )
-
                         return True
                     else:
                         error_text = await response.text()
@@ -119,7 +111,7 @@ class MattermostHTTPClient:
                 # Get channel ID if needed
                 channel_id = await self._get_channel_id(session, channel)
                 if not channel_id:
-                    _LOGGER.error(f"Could not find channel: {channel}")
+                    _LOGGER.error("Could not find channel: %s", channel)
                     return False
 
                 post_data = {
@@ -148,7 +140,7 @@ class MattermostHTTPClient:
                         return False
                     return True
             except Exception as e:
-                _LOGGER.error(f"Error posting message: {e}")
+                _LOGGER.error("Error posting message: %s", e)
                 return False
 
     async def upload_file(
@@ -178,7 +170,7 @@ class MattermostHTTPClient:
                     ) as response:
                         return response.status == 201
             except Exception as e:
-                _LOGGER.error(f"Error uploading file: {e}")
+                _LOGGER.error("Error uploading file: %s", e)
                 return False
 
     async def _get_channel_id(
@@ -195,9 +187,7 @@ class MattermostHTTPClient:
             return channel_name
 
         try:
-            _LOGGER.debug("Looking up channel: %s", channel_name)
-            # Try to get channel by name (requires team)
-            # For now, we'll try to get all teams and search channels
+            # Try to get channel by name across all teams
             async with session.get(
                 f"{self.base_url}/api/v4/teams", headers=self.headers, ssl=False
             ) as response:
@@ -209,12 +199,10 @@ class MattermostHTTPClient:
                     return None
 
                 teams = await response.json()
-                _LOGGER.debug("Found %d teams", len(teams))
 
                 for team in teams:
                     team_id = team["id"]
                     team_name = team.get("name", "unknown")
-                    _LOGGER.debug("Searching in team '%s' (ID: %s)", team_name, team_id)
 
                     # First try: lookup by channel name (API name)
                     async with session.get(
@@ -225,20 +213,7 @@ class MattermostHTTPClient:
                     ) as channel_response:
                         if channel_response.status == 200:
                             channel_data = await channel_response.json()
-                            _LOGGER.debug(
-                                "Found channel '%s' by name in team '%s': %s",
-                                channel_name,
-                                team_name,
-                                channel_data["id"],
-                            )
                             return channel_data["id"]
-                        else:
-                            _LOGGER.debug(
-                                "Channel '%s' not found by name in team '%s': %s",
-                                channel_name,
-                                team_name,
-                                channel_response.status,
-                            )
 
                     # Second try: search all channels by display name
                     async with session.get(
@@ -248,38 +223,15 @@ class MattermostHTTPClient:
                     ) as channels_response:
                         if channels_response.status == 200:
                             channels = await channels_response.json()
-                            _LOGGER.debug(
-                                "Got %d channels in team '%s', searching by "
-                                "display name",
-                                len(channels),
-                                team_name,
-                            )
-
-                            # Search for channel by display name (with or without #)
                             target_display_names = [f"#{channel_name}", channel_name]
 
                             for ch in channels:
                                 display_name = ch.get("display_name", "")
                                 if display_name in target_display_names:
-                                    _LOGGER.debug(
-                                        "Found channel '%s' by display name '%s' "
-                                        "in team '%s': %s",
-                                        channel_name,
-                                        display_name,
-                                        team_name,
-                                        ch["id"],
-                                    )
                                     return ch["id"]
-                        else:
-                            _LOGGER.debug(
-                                "Failed to get channels for team '%s': %s",
-                                team_name,
-                                channels_response.status,
-                            )
 
                 _LOGGER.error(
-                    "Channel '%s' not found in any team (tried by name and "
-                    "display name)",
+                    "Channel '%s' not found in any team",
                     channel_name,
                 )
                 return None
@@ -298,10 +250,6 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Mattermost from a config entry."""
     config = entry.data
-    _LOGGER.info(
-        "Setting up Mattermost integration with config: %s",
-        {k: "***" if "token" in k.lower() else v for k, v in config.items()},
-    )
 
     try:
         # Clean up URL if needed
@@ -322,20 +270,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             else:
                 url = f"https://{url}"
 
-        _LOGGER.debug("Connecting to Mattermost server at: %s", url)
-
-        # Create our HTTP client
+        # Create and test HTTP client
         client = MattermostHTTPClient(url, config[CONF_API_KEY])
-
-        # Test connection
         if not await client.test_connection():
-            _LOGGER.error("Failed to connect to Mattermost server")
             raise ConfigEntryNotReady("Could not connect to Mattermost server")
 
-        _LOGGER.debug("Successfully connected to Mattermost server")
-
     except Exception as err:
-        _LOGGER.error("Unexpected error connecting to Mattermost: %s", err)
+        _LOGGER.error("Failed to connect to Mattermost: %s", err)
         raise ConfigEntryNotReady from err
 
     hass.data.setdefault(DOMAIN, {})
@@ -344,11 +285,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         DATA_HASS_CONFIG: config,
     }
 
-    _LOGGER.info("Mattermost integration data stored, setting up notify platform")
-
     # Set up notify platform using discovery
     discovery_data = hass.data[DOMAIN][entry.entry_id].copy()
-    # Explicitly set the service name
     discovery_data[CONF_NAME] = "mattermost"
 
     await discovery.async_load_platform(
@@ -358,15 +296,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         discovery_data,
         config,
     )
-
-    _LOGGER.info("Mattermost notify platform setup initiated")
-
-    # Add a small delay and check if service was registered
-    import asyncio
-
-    await asyncio.sleep(1)
-    notify_services = hass.services.async_services_for_domain("notify")
-    _LOGGER.info("Notify services after setup: %s", list(notify_services))
 
     return True
 

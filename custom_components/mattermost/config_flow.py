@@ -65,7 +65,7 @@ class MattermostFlowHandler(ConfigFlow, domain=DOMAIN):
             # Parse the URL to extract components for the driver
             from urllib.parse import urlparse
 
-            _LOGGER.debug(f"Testing connection with URL: {url}, Token: {token[:10]}...")
+            _LOGGER.debug("Testing connection with URL: %s", url)
 
             # Handle various URL formats - clean up if user included API path
             clean_url = url
@@ -93,36 +93,21 @@ class MattermostFlowHandler(ConfigFlow, domain=DOMAIN):
             if parsed_url.port:
                 base_url += f":{parsed_url.port}"
 
-            _LOGGER.debug(f"Constructed base URL: {base_url}")
-
-            # Test the connection with multiple methods
+            # Test basic server connectivity
             async with aiohttp.ClientSession() as session:
-                # First, try to check if the server is reachable with a simple ping
                 ping_url = f"{base_url}/api/v4/system/ping"
-                _LOGGER.debug(f"Testing Mattermost server reachability at {ping_url}")
-
                 try:
                     async with session.get(
                         ping_url, timeout=aiohttp.ClientTimeout(total=10), ssl=False
                     ) as ping_response:
-                        _LOGGER.debug(f"Ping response status: {ping_response.status}")
                         if ping_response.status != 200:
                             return "cannot_connect", None
-                except Exception as e:
-                    _LOGGER.error(f"Cannot reach Mattermost server: {e}")
+                except Exception:
                     return "cannot_connect", None
 
-                # Now test authentication - try multiple approaches for bot tokens
-
-                # Bot tokens might need different endpoints or headers
-                _LOGGER.debug(f"Testing various authentication methods")
-
-                # Method 1: Try basic API test with bot token
+                # Test bot token authentication
                 headers = {"Authorization": f"Bearer {token}"}
-
-                # Try the simplest endpoint first - server config (often works for bots)
                 config_url = f"{base_url}/api/v4/config/client"
-                _LOGGER.debug(f"Testing with client config endpoint: {config_url}")
 
                 async with session.get(
                     config_url,
@@ -130,56 +115,13 @@ class MattermostFlowHandler(ConfigFlow, domain=DOMAIN):
                     timeout=aiohttp.ClientTimeout(total=10),
                     ssl=False,
                 ) as response:
-                    _LOGGER.debug(f"Client config response status: {response.status}")
-
                     if response.status == 200:
-                        # This endpoint worked, so the token is valid
-                        _LOGGER.debug(
-                            "Bot token validation successful via client config"
-                        )
                         server_name = f"Bot@{parsed_url.hostname}"
                         return None, {"server": server_name}
+                    elif response.status == 401:
+                        return "invalid_auth", None
 
-                    if response.status == 401:
-                        error_text = await response.text()
-                        _LOGGER.debug(f"Client config failed: {error_text}")
-
-                # Method 2: Try without Bearer prefix (some setups don't use it)
-                headers_no_bearer = {"Authorization": token}
-                async with session.get(
-                    config_url,
-                    headers=headers_no_bearer,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                    ssl=False,
-                ) as response:
-                    _LOGGER.debug(
-                        "No bearer prefix response status: %s", response.status
-                    )
-
-                    if response.status == 200:
-                        _LOGGER.debug(
-                            "Token validation successful without Bearer prefix"
-                        )
-                        server_name = f"Bot@{parsed_url.hostname}"
-                        return None, {"server": server_name}
-
-                # Method 3: Try with X-Token header (alternative method)
-                headers_x_token = {"X-Token": token}
-                async with session.get(
-                    config_url,
-                    headers=headers_x_token,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                    ssl=False,
-                ) as response:
-                    _LOGGER.debug("X-Token header response status: %s", response.status)
-
-                    if response.status == 200:
-                        _LOGGER.debug("Token validation successful with X-Token header")
-                        server_name = f"Bot@{parsed_url.hostname}"
-                        return None, {"server": server_name}
-
-                # Method 4: Try a POST request to webhooks endpoint
-                # (common bot permission)
+                # If config endpoint fails, try webhooks (bots often have webhook permissions)
                 webhooks_url = f"{base_url}/api/v4/hooks/incoming"
                 async with session.get(
                     webhooks_url,
@@ -187,22 +129,11 @@ class MattermostFlowHandler(ConfigFlow, domain=DOMAIN):
                     timeout=aiohttp.ClientTimeout(total=10),
                     ssl=False,
                 ) as response:
-                    _LOGGER.debug(
-                        "Webhooks endpoint response status: %s", response.status
-                    )
-
-                    if response.status == 200:
-                        _LOGGER.debug("Bot token validation successful via webhooks")
-                        server_name = f"Bot@{parsed_url.hostname}"
-                        return None, {"server": server_name}
-                    elif response.status == 403:
+                    if response.status in (200, 403):
                         # 403 means authenticated but no permission - token is valid!
-                        _LOGGER.debug("Bot token valid (got 403 permission denied)")
                         server_name = f"Bot@{parsed_url.hostname}"
                         return None, {"server": server_name}
 
-                # All methods failed
-                _LOGGER.error("All authentication methods failed")
                 return "invalid_auth", None
 
         except aiohttp.ClientError:
