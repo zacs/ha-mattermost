@@ -251,12 +251,15 @@ class MattermostNotificationService(BaseNotificationService):
                 )
                 return
 
+        failed_targets = []
+
         for target in targets:
             try:
                 # Get channel ID
                 channel_id = await self._async_get_channel_id(target)
                 if not channel_id:
                     _LOGGER.error("Could not find channel: %s", target)
+                    failed_targets.append(target)
                     continue
 
                 # Prepare post data
@@ -282,6 +285,13 @@ class MattermostNotificationService(BaseNotificationService):
 
             except Exception as err:
                 _LOGGER.error("Failed to send message to %s: %s", target, err)
+                failed_targets.append(target)
+
+        # Raise exception if any targets failed
+        if failed_targets:
+            raise Exception(
+                f"Failed to send message to channels: {', '.join(failed_targets)}"
+            )
 
     async def _async_send_local_file_message(
         self,
@@ -293,11 +303,13 @@ class MattermostNotificationService(BaseNotificationService):
         """Upload a local file (with message) to Mattermost."""
         if not self._hass.config.is_allowed_path(file_path):
             _LOGGER.error("Path does not exist or is not allowed: %s", file_path)
-            return
+            raise Exception(f"File path not allowed: {file_path}")
 
         if not os.path.isfile(file_path):
             _LOGGER.error("File does not exist: %s", file_path)
-            return
+            raise Exception(f"File does not exist: {file_path}")
+
+        failed_targets = []
 
         for target in targets:
             try:
@@ -305,6 +317,7 @@ class MattermostNotificationService(BaseNotificationService):
                 channel_id = await self._async_get_channel_id(target)
                 if not channel_id:
                     _LOGGER.error("Could not find channel: %s", target)
+                    failed_targets.append(target)
                     continue
 
                 # Upload the file using our HTTP client
@@ -313,6 +326,13 @@ class MattermostNotificationService(BaseNotificationService):
 
             except Exception as err:
                 _LOGGER.error("Failed to send file to %s: %s", target, err)
+                failed_targets.append(target)
+
+        # Raise exception if any targets failed
+        if failed_targets:
+            raise Exception(
+                f"Failed to send file to channels: {', '.join(failed_targets)}"
+            )
 
     async def _async_send_remote_file_message(
         self,
@@ -327,7 +347,7 @@ class MattermostNotificationService(BaseNotificationService):
         """Upload a remote file (with message) to Mattermost."""
         if not self._hass.config.is_allowed_external_url(url):
             _LOGGER.error("URL is not allowed: %s", url)
-            return
+            raise Exception(f"URL not allowed: {url}")
 
         filename = _get_filename_from_url(url)
 
@@ -345,10 +365,12 @@ class MattermostNotificationService(BaseNotificationService):
                 file_content = await resp.read()
         except Exception as err:
             _LOGGER.error("Failed to download file from %s: %s", url, err)
-            return
+            raise Exception(f"Failed to download file from {url}: {err}")
 
         # Save to temporary file and upload using our HTTP client
         import tempfile
+
+        failed_targets = []
 
         for target in targets:
             try:
@@ -356,6 +378,7 @@ class MattermostNotificationService(BaseNotificationService):
                 channel_id = await self._async_get_channel_id(target)
                 if not channel_id:
                     _LOGGER.error("Could not find channel: %s", target)
+                    failed_targets.append(target)
                     continue
 
                 # Create temporary file
@@ -380,6 +403,13 @@ class MattermostNotificationService(BaseNotificationService):
 
             except Exception as err:
                 _LOGGER.error("Failed to send remote file to %s: %s", target, err)
+                failed_targets.append(target)
+
+        # Raise exception if any targets failed
+        if failed_targets:
+            raise Exception(
+                f"Failed to send file to channels: {', '.join(failed_targets)}"
+            )
 
     async def _async_get_channel_id(self, channel_name: str) -> str | None:
         """Get channel ID from channel name or return channel ID if already provided."""
