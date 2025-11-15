@@ -45,7 +45,7 @@ This Home Assistant custom component provides notification functionality for Mat
 ### Basic Text Notification
 
 ```yaml
-service: notify.mattermost
+action: notify.mattermost
 data:
   message: "Hello from Home Assistant!"
   target: "general"
@@ -54,7 +54,7 @@ data:
 ### Message with Title
 
 ```yaml
-service: notify.mattermost
+action: notify.mattermost
 data:
   title: "System Alert"
   message: "Motion detected in living room"
@@ -64,7 +64,7 @@ data:
 ### Send to Multiple Channels
 
 ```yaml
-service: notify.mattermost
+action: notify.mattermost
 data:
   message: "System status update"
   target:
@@ -76,7 +76,7 @@ data:
 ### Send Local File
 
 ```yaml
-service: notify.mattermost
+action: notify.mattermost
 data:
   message: "Security camera snapshot"
   target: "security"
@@ -88,7 +88,7 @@ data:
 ### Send Remote File
 
 ```yaml
-service: notify.mattermost
+action: notify.mattermost
 data:
   message: "Weather radar image"
   target: "weather"
@@ -102,7 +102,7 @@ data:
 ### Rich Message Attachments
 
 ```yaml
-service: notify.mattermost
+action: notify.mattermost
 data:
   message: "System Status Report"
   target: "#monitoring"

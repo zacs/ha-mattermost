@@ -289,7 +289,9 @@ class MattermostNotificationService(BaseNotificationService):
 
         # Raise exception if any targets failed
         if failed_targets:
-            raise Exception(
+            from homeassistant.exceptions import HomeAssistantError
+
+            raise HomeAssistantError(
                 f"Failed to send message to channels: {', '.join(failed_targets)}"
             )
 
@@ -303,11 +305,15 @@ class MattermostNotificationService(BaseNotificationService):
         """Upload a local file (with message) to Mattermost."""
         if not self._hass.config.is_allowed_path(file_path):
             _LOGGER.error("Path does not exist or is not allowed: %s", file_path)
-            raise Exception(f"File path not allowed: {file_path}")
+            from homeassistant.exceptions import HomeAssistantError
+
+            raise HomeAssistantError(f"File path not allowed: {file_path}")
 
         if not os.path.isfile(file_path):
             _LOGGER.error("File does not exist: %s", file_path)
-            raise Exception(f"File does not exist: {file_path}")
+            from homeassistant.exceptions import HomeAssistantError
+
+            raise HomeAssistantError(f"File does not exist: {file_path}")
 
         failed_targets = []
 
@@ -330,7 +336,9 @@ class MattermostNotificationService(BaseNotificationService):
 
         # Raise exception if any targets failed
         if failed_targets:
-            raise Exception(
+            from homeassistant.exceptions import HomeAssistantError
+
+            raise HomeAssistantError(
                 f"Failed to send file to channels: {', '.join(failed_targets)}"
             )
 
@@ -347,7 +355,9 @@ class MattermostNotificationService(BaseNotificationService):
         """Upload a remote file (with message) to Mattermost."""
         if not self._hass.config.is_allowed_external_url(url):
             _LOGGER.error("URL is not allowed: %s", url)
-            raise Exception(f"URL not allowed: {url}")
+            from homeassistant.exceptions import HomeAssistantError
+
+            raise HomeAssistantError(f"URL not allowed: {url}")
 
         filename = _get_filename_from_url(url)
 
@@ -365,7 +375,9 @@ class MattermostNotificationService(BaseNotificationService):
                 file_content = await resp.read()
         except Exception as err:
             _LOGGER.error("Failed to download file from %s: %s", url, err)
-            raise Exception(f"Failed to download file from {url}: {err}")
+            from homeassistant.exceptions import HomeAssistantError
+
+            raise HomeAssistantError(f"Failed to download file from {url}: {err}")
 
         # Save to temporary file and upload using our HTTP client
         import tempfile
@@ -407,7 +419,9 @@ class MattermostNotificationService(BaseNotificationService):
 
         # Raise exception if any targets failed
         if failed_targets:
-            raise Exception(
+            from homeassistant.exceptions import HomeAssistantError
+
+            raise HomeAssistantError(
                 f"Failed to send file to channels: {', '.join(failed_targets)}"
             )
 
