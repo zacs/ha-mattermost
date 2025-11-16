@@ -245,6 +245,7 @@ automation:
    - Verify your bot token is correct
    - Ensure the bot has permission to post in channels
    - Check that the Mattermost server URL is accessible
+   - If you recently deleted and recreated this integration, restart Home Assistant to clear cached data
 
 2. **"Could not find channel" error**
    - Verify the channel name is correct (without #)
