@@ -3,31 +3,38 @@
 [![Validate](https://github.com/zacs/ha-mattermost/actions/workflows/validate.yml/badge.svg)](https://github.com/zacs/ha-mattermost/actions/workflows/validate.yml)
 [![HACS](https://img.shields.io/badge/HACS-Default-orange.svg)](https://github.com/hacs/integration)
 
-This Home Assistant custom component provides notification functionality for Mattermost servers using bot token authentication, allowing you to send messages and files to specific channels.
+This Home Assistant custom component lets you send notification to Mattermost servers. You can send simple or rich messages and attachments.
 
 ## Features
 
-- **Bot Token Authentication**: Uses Mattermost bot tokens for secure API access
 - **Text Notifications**: Send formatted text notifications to Mattermost channels
-- **File Attachments**: Upload and share local or remote files with messages
+- **Attachments**: Upload and share local or remote images/files with messages
 - **Multi-Channel Support**: Send notifications to multiple channels simultaneously
+- **Token Authentication**: Uses both bot tokens and personal access tokens (PATs [personal access tokens] are required for Agent-style bots)
+
+## Screenshots
+
+![Weather Alert](screenshots/weather.png)
+
+![Customized Plex Alert](screenshots/plex.png)
+
+(Plex example uses custom author fields)
 
 ## Requirements
 
-- A Mattermost server (self-hosted or cloud)
-- A bot access token with appropriate permissions
-- Bot account enabled in your Mattermost instance
+- A Mattermost server
+- A token (bot or personal) with appropriate (`post:all` or `post:#channel`) permissions
 
 ## Setup
 
-1. **Create a Bot Account in Mattermost:**
+1. **Create a Bot Account in Mattermost**
    - Go to your Mattermost server
    - Navigate to System Console → Integrations → Bot Accounts
    - Create a new bot account (e.g., "Home Assistant Bot")
-   - Note the bot access token generated
+   - Note the bot access token generated (note: NOT the token ID)
 
-2. **Install the Component:**
-   - Place this component in your `custom_components/mattermost/` directory
+2. **Install the Component**
+   - Install this component from HACS
    - Restart Home Assistant
 
 3. **Configure via UI:**
@@ -35,8 +42,8 @@ This Home Assistant custom component provides notification functionality for Mat
    - Add "Mattermost" integration
    - Provide:
      - Server URL (e.g., `https://chat.company.com` or `192.168.1.100:8065`)
-     - Bot Access Token (from step 1)
-     - Default Channel (e.g., `general` or `notifications`)
+     - Token (from step 1)
+     - Default Channel (e.g., `#general` or `notifications`)
      
    **Note**: For the server URL, you can provide either a full URL like `https://chat.company.com` or just the hostname/IP like `192.168.1.100:8065` (HTTPS will be assumed).
 
@@ -134,15 +141,6 @@ data:
 
 ## Configuration Parameters
 
-### Integration Setup
-
-- **url**: Your Mattermost server URL. Can be:
-  - Full URL: `https://chat.company.com` or `http://192.168.1.100:8065`  
-  - Hostname/IP with port: `192.168.1.100:8065` (HTTPS assumed)
-  - Just hostname: `chat.company.com` (HTTPS and default port assumed)
-- **api_key**: Bot access token from your Mattermost bot account
-- **default_channel**: Default channel name for notifications (without #)
-
 ### Notification Data Options
 
 #### File Attachments
@@ -156,11 +154,11 @@ Rich formatting following Mattermost's attachment API.
 
 **Note**: The integration automatically adds `author_name: "Home Assistant"` and `author_icon: "https://www.home-assistant.io/images/favicon-192x192-full.png"` to all attachments unless you explicitly specify different values.
 
-- **fallback**: Plain text fallback for notifications
+- **fallback**: Plain text fallback for notifications (note: this is what will show up in a Mattermost push notification, so make sure you populate it if you use those)
 - **color**: Hex color for attachment border (e.g., "#ff0000")
 - **pretext**: Text shown above attachment
 - **author_name**: Author name (defaults to "Home Assistant")
-- **author_link**: URL for author name link
+- **author_link**: URL for author name link (defaults to nothing)
 - **author_icon**: 16x16px icon for author (defaults to Home Assistant favicon)
 - **title**: Attachment title
 - **title_link**: URL for title link
@@ -244,7 +242,7 @@ automation:
 1. **"Invalid authentication" error**
    - Verify your bot token is correct
    - Ensure the bot has permission to post in channels
-   - Check that the Mattermost server URL is accessible
+   - Check that the Mattermost server URL is accessible from the Home Assistant machine
    - If you recently deleted and recreated this integration, restart Home Assistant to clear cached data
 
 2. **"Could not find channel" error**
@@ -275,24 +273,14 @@ logger:
 
 ## Security Considerations
 
+These are all brought to you by Claude but are generally pretty smart...
+
 - Store bot tokens securely using Home Assistant's secrets
 - Use HTTPS for Mattermost server connections
 - Limit bot permissions to only necessary channels
 - Regularly rotate bot tokens
 - Be cautious with file path permissions
 
-## Version History
-
-- **1.0.0**: Initial release
-  - Basic text messaging
-  - File attachments (local and remote)
-  - Rich message attachments
-  - Config flow setup
-
-## License
-
-This component is provided under the same license as Home Assistant Core.
-
 ## Contributing
 
-Contributions are welcome! Please submit issues and pull requests on the project repository.
+Contributions welcome! Please submit issues and pull requests on the project repository. I am a total newbie to Mattermost so I may have missed opportunities, let me know. 
