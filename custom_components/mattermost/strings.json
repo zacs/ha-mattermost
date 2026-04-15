@@ -11,7 +11,7 @@
           "default_channel": "Default Channel"
         },
         "data_description": {
-          "url": "URL of your Mattermost server (e.g., https://chat.company.com or 192.168.1.100:8065).",
+          "url": "URL of your Mattermost server, including port if needed (e.g., chat.company.com or 192.168.1.100:8065).",
           "api_key": "Bot access token generated from your Mattermost bot account. This is NOT the Token ID.",
           "default_channel": "Default channel name for notifications (e.g., general, alerts)."
         }
