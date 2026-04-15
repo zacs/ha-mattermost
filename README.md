@@ -22,7 +22,7 @@ This Home Assistant custom component lets you send notification to Mattermost se
 
 ## Requirements
 
-- A Mattermost server
+- A Mattermost server running 11.x
 - A token (bot or personal) with appropriate (`post:all` or `post:#channel`) permissions
 
 ## Setup

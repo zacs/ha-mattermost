@@ -144,9 +144,13 @@ class MattermostHTTPClient:
                 return False
 
     async def upload_file(
-        self, channel: str, file_path: str, filename: str | None = None
+        self,
+        channel: str,
+        file_path: str,
+        message: str = "",
+        **kwargs,
     ) -> bool:
-        """Upload a file to a channel."""
+        """Upload a file to a channel and create a post with it."""
         async with aiohttp.ClientSession() as session:
             try:
                 # Get channel ID
@@ -154,21 +158,68 @@ class MattermostHTTPClient:
                 if not channel_id:
                     return False
 
+                # Step 1: Upload the file
                 with open(file_path, "rb") as f:
                     form = aiohttp.FormData()
-                    form.add_field(
-                        "files", f, filename=filename or os.path.basename(file_path)
-                    )
+                    form.add_field("files", f, filename=os.path.basename(file_path))
                     form.add_field("channel_id", channel_id)
+
+                    upload_headers = {
+                        "Authorization": f"Bearer {self.token}",
+                        "User-Agent": "HomeAssistant-Mattermost",
+                    }
 
                     async with session.post(
                         f"{self.base_url}/api/v4/files",
-                        headers=self.headers,
+                        headers=upload_headers,
                         data=form,
                         timeout=aiohttp.ClientTimeout(total=60),
                         ssl=False,
                     ) as response:
-                        return response.status == 201
+                        if response.status != 201:
+                            error_text = await response.text()
+                            _LOGGER.error(
+                                "Failed to upload file: %s - %s",
+                                response.status,
+                                error_text,
+                            )
+                            return False
+
+                        file_response = await response.json()
+                        file_infos = file_response.get("file_infos", [])
+                        if not file_infos:
+                            _LOGGER.error("File upload returned no file info")
+                            return False
+
+                        file_id = file_infos[0]["id"]
+
+                # Step 2: Create a post with the uploaded file
+                post_data = {
+                    "channel_id": channel_id,
+                    "message": message or "",
+                    "file_ids": [file_id],
+                }
+
+                # Add any additional post properties from kwargs
+                if "props" in kwargs:
+                    post_data["props"] = kwargs["props"]
+
+                async with session.post(
+                    f"{self.base_url}/api/v4/posts",
+                    headers=self.headers,
+                    json=post_data,
+                    timeout=aiohttp.ClientTimeout(total=30),
+                    ssl=False,
+                ) as response:
+                    if response.status != 201:
+                        error_text = await response.text()
+                        _LOGGER.error(
+                            "Failed to create post with file: %s - %s",
+                            response.status,
+                            error_text,
+                        )
+                        return False
+                    return True
             except Exception as e:
                 _LOGGER.error("Error uploading file: %s", e)
                 return False

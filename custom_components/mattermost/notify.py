@@ -80,19 +80,15 @@ ATTACHMENT_SCHEMA = vol.Schema(
     }
 )
 
-DATA_FILE_SCHEMA = vol.Schema(
-    {
-        vol.Required(ATTR_FILE): vol.Any(FILE_PATH_SCHEMA, FILE_URL_SCHEMA),
-    }
+DATA_SCHEMA = vol.Any(
+    vol.Schema(
+        {
+            vol.Optional(ATTR_FILE): vol.Any(FILE_PATH_SCHEMA, FILE_URL_SCHEMA),
+            vol.Optional(ATTR_ATTACHMENTS): [ATTACHMENT_SCHEMA],
+        }
+    ),
+    None,
 )
-
-DATA_TEXT_ONLY_SCHEMA = vol.Schema(
-    {
-        vol.Optional(ATTR_ATTACHMENTS): [ATTACHMENT_SCHEMA],
-    }
-)
-
-DATA_SCHEMA = vol.All(vol.Any(DATA_FILE_SCHEMA, DATA_TEXT_ONLY_SCHEMA, None))
 
 
 def get_service(
@@ -204,17 +200,19 @@ class MattermostNotificationService(BaseNotificationService):
             kwargs.get(ATTR_TARGET, [self._config[CONF_DEFAULT_CHANNEL]])
         )
 
+        attachments = data.get(ATTR_ATTACHMENTS)
+
         # Message Type 1: A text-only message (possibly with attachments)
         if ATTR_FILE not in data:
             return await self._async_send_text_message(
-                targets, message, title, data.get(ATTR_ATTACHMENTS)
+                targets, message, title, attachments
             )
 
-        # Message Type 2: A file message
+        # Message Type 2: A file message (possibly with attachments)
         file_data = data[ATTR_FILE]
         if CONF_PATH in file_data:
             return await self._async_send_local_file_message(
-                file_data[CONF_PATH], targets, message, title
+                file_data[CONF_PATH], targets, message, title, attachments
             )
 
         return await self._async_send_remote_file_message(
@@ -222,6 +220,7 @@ class MattermostNotificationService(BaseNotificationService):
             targets,
             message,
             title,
+            attachments=attachments,
             username=file_data.get(ATTR_USERNAME),
             password=file_data.get(ATTR_PASSWORD),
         )
@@ -265,20 +264,9 @@ class MattermostNotificationService(BaseNotificationService):
                 # Prepare post data
                 post_kwargs = {}
                 if attachments:
-                    # Add default author info to attachments if not specified
-                    processed_attachments = []
-                    for attachment in attachments:
-                        attachment_copy = attachment.copy()
-                        if "author_name" not in attachment_copy:
-                            attachment_copy["author_name"] = "Home Assistant"
-                        if "author_icon" not in attachment_copy:
-                            attachment_copy["author_icon"] = (
-                                "https://www.home-assistant.io/images/"
-                                "favicon-192x192-full.png"
-                            )
-                        processed_attachments.append(attachment_copy)
-
-                    post_kwargs["props"] = {"attachments": processed_attachments}
+                    post_kwargs["props"] = {
+                        "attachments": self._process_attachments(attachments)
+                    }
 
                 # Send the message using our HTTP client
                 await self._client.post_message(channel_id, full_message, **post_kwargs)
@@ -301,6 +289,7 @@ class MattermostNotificationService(BaseNotificationService):
         targets: list[str],
         message: str,
         title: str | None,
+        attachments: list[dict] | None = None,
     ) -> None:
         """Upload a local file (with message) to Mattermost."""
         if not self._hass.config.is_allowed_path(file_path):
@@ -328,7 +317,14 @@ class MattermostNotificationService(BaseNotificationService):
 
                 # Upload the file using our HTTP client
                 full_message = f"**{title}**\n\n{message}" if title else message
-                await self._client.upload_file(channel_id, file_path, full_message)
+                post_kwargs = {}
+                if attachments:
+                    post_kwargs["props"] = {
+                        "attachments": self._process_attachments(attachments)
+                    }
+                await self._client.upload_file(
+                    channel_id, file_path, full_message, **post_kwargs
+                )
 
             except Exception as err:
                 _LOGGER.error("Failed to send file to %s: %s", target, err)
@@ -349,6 +345,7 @@ class MattermostNotificationService(BaseNotificationService):
         message: str,
         title: str | None,
         *,
+        attachments: list[dict] | None = None,
         username: str | None = None,
         password: str | None = None,
     ) -> None:
@@ -403,8 +400,13 @@ class MattermostNotificationService(BaseNotificationService):
                 try:
                     # Upload using our HTTP client
                     full_message = f"**{title}**\n\n{message}" if title else message
+                    post_kwargs = {}
+                    if attachments:
+                        post_kwargs["props"] = {
+                            "attachments": self._process_attachments(attachments)
+                        }
                     await self._client.upload_file(
-                        channel_id, temp_file_path, full_message
+                        channel_id, temp_file_path, full_message, **post_kwargs
                     )
                 finally:
                     # Clean up temporary file
@@ -424,6 +426,21 @@ class MattermostNotificationService(BaseNotificationService):
             raise HomeAssistantError(
                 f"Failed to send file to channels: {', '.join(failed_targets)}"
             )
+
+    @staticmethod
+    def _process_attachments(attachments: list[dict]) -> list[dict]:
+        """Add default author info to attachments if not specified."""
+        processed = []
+        for attachment in attachments:
+            attachment_copy = attachment.copy()
+            if "author_name" not in attachment_copy:
+                attachment_copy["author_name"] = "Home Assistant"
+            if "author_icon" not in attachment_copy:
+                attachment_copy["author_icon"] = (
+                    "https://www.home-assistant.io/images/" "favicon-192x192-full.png"
+                )
+            processed.append(attachment_copy)
+        return processed
 
     async def _async_get_channel_id(self, channel_name: str) -> str | None:
         """Get channel ID from channel name or return channel ID if already provided."""
