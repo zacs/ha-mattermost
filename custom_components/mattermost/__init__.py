@@ -35,8 +35,9 @@ CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 class MattermostHTTPClient:
     """Simple HTTP client for Mattermost API."""
 
-    def __init__(self, base_url: str, token: str):
+    def __init__(self, hass: HomeAssistant, base_url: str, token: str):
         """Initialize the client."""
+        self.hass = hass
         self.base_url = base_url.rstrip("/")
         self.token = token
         # Use Bearer format as specified in Mattermost API docs
@@ -151,6 +152,20 @@ class MattermostHTTPClient:
         **kwargs,
     ) -> bool:
         """Upload a file to a channel and create a post with it."""
+
+        # Read file in executor to avoid blocking the event loop
+        def _read_file():
+            with open(file_path, "rb") as f:
+                return f.read()
+
+        try:
+            file_content = await self.hass.async_add_executor_job(_read_file)
+        except Exception as e:
+            _LOGGER.error("Error reading file %s: %s", file_path, e)
+            return False
+
+        filename = os.path.basename(file_path)
+
         async with aiohttp.ClientSession() as session:
             try:
                 # Get channel ID
@@ -159,39 +174,38 @@ class MattermostHTTPClient:
                     return False
 
                 # Step 1: Upload the file
-                with open(file_path, "rb") as f:
-                    form = aiohttp.FormData()
-                    form.add_field("files", f, filename=os.path.basename(file_path))
-                    form.add_field("channel_id", channel_id)
+                form = aiohttp.FormData()
+                form.add_field("files", file_content, filename=filename)
+                form.add_field("channel_id", channel_id)
 
-                    upload_headers = {
-                        "Authorization": f"Bearer {self.token}",
-                        "User-Agent": "HomeAssistant-Mattermost",
-                    }
+                upload_headers = {
+                    "Authorization": f"Bearer {self.token}",
+                    "User-Agent": "HomeAssistant-Mattermost",
+                }
 
-                    async with session.post(
-                        f"{self.base_url}/api/v4/files",
-                        headers=upload_headers,
-                        data=form,
-                        timeout=aiohttp.ClientTimeout(total=60),
-                        ssl=False,
-                    ) as response:
-                        if response.status != 201:
-                            error_text = await response.text()
-                            _LOGGER.error(
-                                "Failed to upload file: %s - %s",
-                                response.status,
-                                error_text,
-                            )
-                            return False
+                async with session.post(
+                    f"{self.base_url}/api/v4/files",
+                    headers=upload_headers,
+                    data=form,
+                    timeout=aiohttp.ClientTimeout(total=60),
+                    ssl=False,
+                ) as response:
+                    if response.status != 201:
+                        error_text = await response.text()
+                        _LOGGER.error(
+                            "Failed to upload file: %s - %s",
+                            response.status,
+                            error_text,
+                        )
+                        return False
 
-                        file_response = await response.json()
-                        file_infos = file_response.get("file_infos", [])
-                        if not file_infos:
-                            _LOGGER.error("File upload returned no file info")
-                            return False
+                    file_response = await response.json()
+                    file_infos = file_response.get("file_infos", [])
+                    if not file_infos:
+                        _LOGGER.error("File upload returned no file info")
+                        return False
 
-                        file_id = file_infos[0]["id"]
+                    file_id = file_infos[0]["id"]
 
                 # Step 2: Create a post with the uploaded file
                 post_data = {
@@ -322,7 +336,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 url = f"https://{url}"
 
         # Create and test HTTP client
-        client = MattermostHTTPClient(url, config[CONF_API_KEY])
+        client = MattermostHTTPClient(hass, url, config[CONF_API_KEY])
         if not await client.test_connection():
             raise ConfigEntryNotReady("Could not connect to Mattermost server")
 
