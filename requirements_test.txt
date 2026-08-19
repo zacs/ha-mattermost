@@ -1,0 +1,13 @@
+homeassistant==2026.2.3
+pytest-homeassistant-custom-component==0.13.316
+aioresponses==0.7.9
+# hassil/home-assistant-intents are required transitively by
+# homeassistant.components.conversation, which the Assist bridge
+# (assist_bridge.py) imports at module load time. Their compatible version
+# is tightly coupled to the exact homeassistant version above (see that
+# version's homeassistant/components/conversation/manifest.json) -- pytest-
+# homeassistant-custom-component does not pin homeassistant tightly enough
+# for pip to resolve this automatically, so all four packages here must be
+# bumped together, not independently, or conversation's import will break.
+hassil==3.5.0
+home-assistant-intents==2026.1.28

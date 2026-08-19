@@ -7,10 +7,16 @@ This Home Assistant custom component lets you send notification to Mattermost se
 
 ## Features
 
-- **Text Notifications**: Send formatted text notifications to Mattermost channels
+- **Notify Entity**: A modern Home Assistant notify entity (`notify.<server_name>`) for simple text notifications
+- **`mattermost.send_message` Service**: Full-featured messaging — rich attachments, multi-channel targeting, local/remote file uploads — usable for more than just notifications
+- **Assist Chat Bridge** (optional): Chat with Home Assistant via Mattermost direct messages or @mentions
+- **Reconfigurable**: Update server URL, token, or default channel without deleting and re-adding the integration
+- **Multiple Servers**: Configure more than one Mattermost server at once
 - **Attachments**: Upload and share local or remote images/files with messages
-- **Multi-Channel Support**: Send notifications to multiple channels simultaneously
+- **Multi-Channel Support**: Send messages to multiple channels simultaneously
 - **Token Authentication**: Uses both bot tokens and personal access tokens (PATs [personal access tokens] are required for Agent-style bots)
+
+> **`notify.mattermost` is deprecated.** It still works, but new automations should use the notify entity (simple text) or the `mattermost.send_message` service (everything else) instead. See [Modern Notify Entity](#modern-notify-entity) and [`mattermost.send_message` Service](#mattermostsend_message-service) below.
 
 ## Screenshots
 
@@ -47,7 +53,50 @@ This Home Assistant custom component lets you send notification to Mattermost se
      
    **Note**: For the server URL, you can provide either a full URL like `https://chat.company.com` or just the hostname/IP like `192.168.1.100:8065` (HTTPS will be assumed).
 
+### Reconfiguring
+
+To update the server URL, token, or default channel for an existing integration entry, go to Settings → Devices & Services, find the Mattermost entry, and choose **Reconfigure**. There's no need to delete and re-add it.
+
+### Multiple Servers
+
+You can add the Mattermost integration more than once to connect to multiple servers. Each entry gets its own notify entity, connectivity sensor, and (optionally) Assist bridge; entries are labeled by server hostname (e.g. "Mattermost (chat.company.com)") so they're distinguishable in the UI. When calling `mattermost.send_message` with more than one server configured, pass `config_entry_id` to pick which one to use.
+
+### Assist Chat Bridge (optional)
+
+You can bridge this bot to Home Assistant's Assist feature, letting you issue voice/chat-style commands to Home Assistant from Mattermost. To enable it, go to Settings → Devices & Services → Mattermost → Configure, and turn on **Enable Assist chat bridge**. Once enabled, direct messages to the bot and @mentions of the bot in channels it belongs to are forwarded to Assist, and the reply is posted back.
+
+**Security note**: enabling this grants Home Assistant command access to anyone who can send the bot a direct message or @mention it in a shared channel. It's off by default — only turn it on if you trust everyone with access to the bot.
+
 ## Usage
+
+### Modern Notify Entity
+
+Each configured Mattermost server gets a notify entity that sends plain text (optionally with a title) to that server's default channel:
+
+```yaml
+action: notify.send_message
+target:
+  entity_id: notify.mattermost_chat_company_com
+data:
+  message: "Hello from Home Assistant!"
+  title: "System Alert"
+```
+
+This is the simplest path for basic notifications. For channel targeting, attachments, or file uploads, use the `mattermost.send_message` service below.
+
+### `mattermost.send_message` Service
+
+`mattermost.send_message` has full feature parity with `notify.mattermost` (see examples further down — every `notify.mattermost` example in this README works identically as `mattermost.send_message`, just swap the action name) and can be used outside of notification contexts too. `target` is optional and defaults to the server's configured default channel if omitted. If you have more than one Mattermost server configured, pass `config_entry_id` to select which one:
+
+```yaml
+action: mattermost.send_message
+data:
+  config_entry_id: "<config entry id, only needed with multiple servers>"
+  message: "Hello from Home Assistant!"
+  target: "general"
+```
+
+### Legacy `notify.mattermost` (deprecated)
 
 ### Basic Text Notification
 

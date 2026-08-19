@@ -31,3 +31,50 @@ notify:
       required: false
       selector:
         object:
+
+send_message:
+  name: Send Mattermost message
+  description: Send a message (text, attachments, and/or file) to one or more Mattermost channels via a specific configured server. Unlike the Mattermost notify entity, this supports channel targeting, rich attachments, and file uploads.
+  fields:
+    config_entry_id:
+      name: Mattermost server
+      description: Which configured Mattermost server to send through. Required if more than one is configured; optional (and inferred) if only one is configured.
+      required: false
+      selector:
+        config_entry:
+          integration: mattermost
+    message:
+      name: Message
+      description: The message text to send (can be empty if using attachments).
+      example: "The garage door has been open for 10 minutes."
+      required: false
+      selector:
+        text:
+          multiline: true
+    title:
+      name: Title
+      description: Optional title for the message.
+      example: "Your Garage Door Friend"
+      required: false
+      selector:
+        text:
+    target:
+      name: Channel
+      description: Channel name, display name (e.g. 'general', '#general'), or channel ID. Can be a single channel or list of channels. Defaults to the server's configured default channel if omitted.
+      example: ["general", "#alerts", "jgw476jxx7rd5ebefxz7x8h1mo"]
+      required: false
+      selector:
+        text:
+          multiple: true
+    file:
+      name: File
+      description: A local file path or remote URL to upload alongside the message.
+      required: false
+      selector:
+        object:
+    attachments:
+      name: Attachments
+      description: A list of Mattermost rich message attachments.
+      required: false
+      selector:
+        object:

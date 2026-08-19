@@ -7,7 +7,21 @@
         "description": "Set up Mattermost notifications using a bot token. You'll need to create a bot account in your Mattermost server first.",
         "data": {
           "url": "Server URL",
-          "api_key": "Bot Access Token", 
+          "api_key": "Bot Access Token",
+          "default_channel": "Default Channel"
+        },
+        "data_description": {
+          "url": "URL of your Mattermost server, including port if needed (e.g., chat.company.com or 192.168.1.100:8065).",
+          "api_key": "Bot access token generated from your Mattermost bot account. This is NOT the Token ID.",
+          "default_channel": "Default channel name for notifications (e.g., general, alerts)."
+        }
+      },
+      "reconfigure": {
+        "title": "Reconfigure Mattermost",
+        "description": "Update the connection settings for this Mattermost server.",
+        "data": {
+          "url": "Server URL",
+          "api_key": "Bot Access Token",
           "default_channel": "Default Channel"
         },
         "data_description": {
@@ -23,7 +37,24 @@
       "unknown": "[%key:common::config_flow::error::unknown%]"
     },
     "abort": {
-      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+      "already_configured": "[%key:common::config_flow::abort::already_configured_device%]",
+      "reconfigure_successful": "[%key:common::config_flow::abort::reconfigure_successful%]"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Mattermost options",
+        "description": "Optionally bridge this Mattermost bot to Home Assistant's Assist feature, so you can chat with Home Assistant via Mattermost direct messages or @mentions.",
+        "data": {
+          "enable_assist_bridge": "Enable Assist chat bridge",
+          "assist_agent_id": "Assist conversation agent"
+        },
+        "data_description": {
+          "enable_assist_bridge": "When enabled, anyone who can send this bot a Mattermost direct message, or @mention it in a channel it belongs to, can issue Home Assistant voice/chat commands. Only enable this if you trust everyone with access to this bot.",
+          "assist_agent_id": "Optional: the specific Assist conversation agent to use. Leave blank to use the default agent."
+        }
+      }
     }
   },
   "entity": {
@@ -31,6 +62,44 @@
       "connectivity": {
         "name": "Server connectivity"
       }
+    }
+  },
+  "services": {
+    "send_message": {
+      "name": "Send Mattermost message",
+      "description": "Send a message (text, attachments, and/or file) to one or more Mattermost channels via a specific configured server.",
+      "fields": {
+        "config_entry_id": {
+          "name": "Mattermost server",
+          "description": "Which configured Mattermost server to send through. Required if more than one is configured."
+        },
+        "message": {
+          "name": "Message",
+          "description": "The message text to send (can be empty if using attachments)."
+        },
+        "title": {
+          "name": "Title",
+          "description": "Optional title for the message."
+        },
+        "target": {
+          "name": "Channel",
+          "description": "Channel name, display name, or channel ID. Can be a single channel or list of channels. Defaults to the server's configured default channel if omitted."
+        },
+        "file": {
+          "name": "File",
+          "description": "A local file path or remote URL to upload alongside the message."
+        },
+        "attachments": {
+          "name": "Attachments",
+          "description": "A list of Mattermost rich message attachments."
+        }
+      }
+    }
+  },
+  "issues": {
+    "deprecated_notify_service": {
+      "title": "The Mattermost notify service is deprecated",
+      "description": "notify.mattermost will be removed in a future release. Please switch to the Mattermost notify entity or the mattermost.send_message service."
     }
   }
 }

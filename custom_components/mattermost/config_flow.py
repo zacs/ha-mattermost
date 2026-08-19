@@ -4,15 +4,35 @@ from __future__ import annotations
 
 import logging
 from typing import Any
+from urllib.parse import urlparse
 
 import aiohttp
 import voluptuous as vol
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import (
+    ConfigEntry,
+    ConfigFlow,
+    ConfigFlowResult,
+    OptionsFlow,
+)
 from homeassistant.const import CONF_API_KEY, CONF_URL
+from homeassistant.core import callback
 
-from .const import CONF_DEFAULT_CHANNEL, DOMAIN
+from .api import normalize_base_url
+from .const import (
+    CONF_ASSIST_AGENT_ID,
+    CONF_DEFAULT_CHANNEL,
+    CONF_ENABLE_ASSIST_BRIDGE,
+    DEFAULT_ENABLE_ASSIST_BRIDGE,
+    DOMAIN,
+)
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _title_for(url: str) -> str:
+    """Derive a UI-distinguishing title for a config entry from its server URL."""
+    hostname = urlparse(normalize_base_url(url)).hostname or url
+    return f"Mattermost ({hostname})"
 
 
 class MattermostFlowHandler(ConfigFlow, domain=DOMAIN):
@@ -24,7 +44,20 @@ class MattermostFlowHandler(ConfigFlow, domain=DOMAIN):
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
         """Handle a flow initiated by the user."""
+        return await self._async_step_connect(user_input, is_reconfigure=False)
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Handle reconfiguration of an existing entry."""
+        return await self._async_step_connect(user_input, is_reconfigure=True)
+
+    async def _async_step_connect(
+        self, user_input: dict[str, Any] | None, is_reconfigure: bool
+    ) -> ConfigFlowResult:
+        """Shared logic for the user and reconfigure steps."""
         errors = {}
+        step_id = "reconfigure" if is_reconfigure else "user"
 
         if user_input is not None:
             error, info = await self._async_try_connect(
@@ -38,56 +71,51 @@ class MattermostFlowHandler(ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(
                     f"{user_input[CONF_URL]}_{user_input[CONF_API_KEY][:8]}"
                 )
+                if is_reconfigure:
+                    self._abort_if_unique_id_mismatch()
+                    return self.async_update_reload_and_abort(
+                        self._get_reconfigure_entry(),
+                        data_updates=user_input,
+                    )
                 self._abort_if_unique_id_configured()
                 return self.async_create_entry(
-                    title="Mattermost",
+                    title=_title_for(user_input[CONF_URL]),
                     data=user_input,
                 )
 
-        user_input = user_input or {}
+        defaults = self._get_reconfigure_entry().data if is_reconfigure else {}
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_URL): str,
+                vol.Required(CONF_API_KEY): str,
+                vol.Required(CONF_DEFAULT_CHANNEL): str,
+            }
+        )
+        if defaults:
+            schema = self.add_suggested_values_to_schema(schema, defaults)
+
         return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_URL): str,
-                    vol.Required(CONF_API_KEY): str,
-                    vol.Required(CONF_DEFAULT_CHANNEL): str,
-                }
-            ),
+            step_id=step_id,
+            data_schema=schema,
             errors=errors,
         )
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(
+        config_entry: ConfigEntry,
+    ) -> MattermostOptionsFlowHandler:
+        """Create the options flow."""
+        return MattermostOptionsFlowHandler()
 
     async def _async_try_connect(
         self, token: str, url: str, channel: str
     ) -> tuple[str, None] | tuple[None, dict[str, str]]:
         """Try connecting to Mattermost."""
         try:
-            # Parse the URL to extract components for the driver
-            from urllib.parse import urlparse
-
             _LOGGER.debug("Testing connection with URL: %s", url)
 
-            # Handle various URL formats - clean up if user included API path
-            clean_url = url
-            if "/api/v4" in clean_url:
-                # Remove API path if user included it
-                clean_url = clean_url.split("/api/v4")[0]
-
-            # Handle various URL formats
-            if not clean_url.startswith(("http://", "https://")):
-                # Default to HTTP for local IPs, HTTPS for domains
-                if (
-                    clean_url.startswith("192.168.")
-                    or clean_url.startswith("10.")
-                    or clean_url.startswith("127.")
-                    or "localhost" in clean_url
-                ):
-                    test_url = f"http://{clean_url}"
-                else:
-                    test_url = f"https://{clean_url}"
-            else:
-                test_url = clean_url
-
+            test_url = normalize_base_url(url)
             parsed_url = urlparse(test_url)
             base_url = f"{parsed_url.scheme}://{parsed_url.hostname}"
             if parsed_url.port:
@@ -141,3 +169,31 @@ class MattermostFlowHandler(ConfigFlow, domain=DOMAIN):
         except Exception:
             _LOGGER.exception("Unexpected exception")
             return "unknown", None
+
+
+class MattermostOptionsFlowHandler(OptionsFlow):
+    """Handle Mattermost options (the Assist chat bridge toggle)."""
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Manage the options."""
+        if user_input is not None:
+            return self.async_create_entry(title="", data=user_input)
+
+        current = self.config_entry.options
+        schema = vol.Schema(
+            {
+                vol.Optional(
+                    CONF_ENABLE_ASSIST_BRIDGE,
+                    default=current.get(
+                        CONF_ENABLE_ASSIST_BRIDGE, DEFAULT_ENABLE_ASSIST_BRIDGE
+                    ),
+                ): bool,
+                vol.Optional(
+                    CONF_ASSIST_AGENT_ID,
+                    description={"suggested_value": current.get(CONF_ASSIST_AGENT_ID)},
+                ): str,
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema)
