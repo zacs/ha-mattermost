@@ -50,58 +50,110 @@ class MattermostHTTPClient:
         }
 
     async def test_connection(self) -> bool:
-        """Test if the connection and authentication work."""
+        """Test if the connection and authentication work.
+
+        Compatibility notes:
+        - Some older Mattermost servers (e.g. 10.x) may not expose certain
+          endpoints exactly as newer ones do. We therefore:
+          1) Ping the server (/api/v4/system/ping) to ensure reachability.
+          2) Probe /api/v4/config/client if available (do not fail on 404).
+          3) Attempt token auth with /api/v4/users/me.
+          4) Fallback to /api/v4/hooks/incoming (200 or 403 indicates valid token/server).
+        """
         async with aiohttp.ClientSession() as session:
             try:
-                # First test basic connectivity
-                async with session.get(
-                    f"{self.base_url}/api/v4/config/client",
-                    headers={"Content-Type": "application/json"},
-                    timeout=aiohttp.ClientTimeout(total=10),
-                    ssl=False,
-                ) as response:
-                    if response.status != 200:
-                        error_text = await response.text()
-                        _LOGGER.error(
-                            "Server connectivity failed: %s - %s",
-                            response.status,
-                            error_text,
-                        )
-                        return False
-                    _LOGGER.debug("Server connectivity test passed")
-
-                # Test authentication with the bot token
-                async with session.get(
-                    f"{self.base_url}/api/v4/users/me",
-                    headers=self.headers,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                    ssl=False,
-                ) as response:
-                    if response.status == 200:
-                        user_data = await response.json()
-                        username = user_data.get("username", "unknown")
-                        is_bot = user_data.get("is_bot", False)
-                        _LOGGER.info(
-                            "Successfully authenticated as bot user: %s", username
-                        )
-
-                        if not is_bot:
-                            _LOGGER.warning(
-                                "User account is not marked as bot. Consider using a bot account."
+                # 1) Ping server for basic reachability
+                ping_url = f"{self.base_url}/api/v4/system/ping"
+                try:
+                    async with session.get(
+                        ping_url,
+                        headers={"Content-Type": "application/json"},
+                        timeout=aiohttp.ClientTimeout(total=10),
+                        ssl=False,
+                    ) as ping_resp:
+                        if ping_resp.status != 200:
+                            error_text = await ping_resp.text()
+                            _LOGGER.error(
+                                "Server ping failed: %s - %s", ping_resp.status, error_text
                             )
-                        return True
-                    else:
-                        error_text = await response.text()
-                        _LOGGER.error(
-                            "Bot authentication failed: %s - %s",
-                            response.status,
-                            error_text,
-                        )
-                        _LOGGER.error(
-                            "Check that your bot token is valid and the bot has proper "
-                            "permissions"
-                        )
-                        return False
+                            return False
+                        _LOGGER.debug("Server ping passed")
+                except Exception as e:
+                    _LOGGER.error("Server ping request failed: %s", e)
+                    return False
+
+                # 2) Try config/client - helpful on newer servers but may be absent on older ones.
+                config_url = f"{self.base_url}/api/v4/config/client"
+                try:
+                    async with session.get(
+                        config_url,
+                        headers={"Content-Type": "application/json"},
+                        timeout=aiohttp.ClientTimeout(total=10),
+                        ssl=False,
+                    ) as cfg_resp:
+                        if cfg_resp.status == 200:
+                            _LOGGER.debug("Config endpoint available")
+                        else:
+                            # Don't treat non-200 as fatal here; continue to auth checks.
+                            _LOGGER.debug(
+                                "Config endpoint returned status %s, continuing with auth checks",
+                                cfg_resp.status,
+                            )
+                except Exception as e:
+                    _LOGGER.debug("Config endpoint check failed (ignoring): %s", e)
+
+                # 3) Primary token/auth check: users/me
+                users_url = f"{self.base_url}/api/v4/users/me"
+                try:
+                    async with session.get(
+                        users_url,
+                        headers=self.headers,
+                        timeout=aiohttp.ClientTimeout(total=10),
+                        ssl=False,
+                    ) as user_resp:
+                        if user_resp.status == 200:
+                            user_data = await user_resp.json()
+                            username = user_data.get("username", "unknown")
+                            is_bot = user_data.get("is_bot", False)
+                            _LOGGER.info(
+                                "Successfully authenticated as bot user: %s", username
+                            )
+                            if not is_bot:
+                                _LOGGER.warning(
+                                    "User account is not marked as bot. Consider using a bot account."
+                                )
+                            return True
+                        elif user_resp.status == 401:
+                            _LOGGER.error("Bot authentication failed: 401 Unauthorized")
+                        else:
+                            text = await user_resp.text()
+                            _LOGGER.debug("users/me returned %s: %s", user_resp.status, text)
+                except Exception as e:
+                    _LOGGER.debug("users/me request failed: %s", e)
+
+                # 4) Fallback: try incoming webhooks - some tokens/servers respond here (200 or 403 means token/server usable)
+                hooks_url = f"{self.base_url}/api/v4/hooks/incoming"
+                try:
+                    async with session.get(
+                        hooks_url,
+                        headers=self.headers,
+                        timeout=aiohttp.ClientTimeout(total=10),
+                        ssl=False,
+                    ) as hooks_resp:
+                        if hooks_resp.status in (200, 403):
+                            _LOGGER.debug(
+                                "Webhooks endpoint indicates server/token valid (status %s)",
+                                hooks_resp.status,
+                            )
+                            return True
+                        _LOGGER.debug("Webhooks endpoint returned %s", hooks_resp.status)
+                except Exception as e:
+                    _LOGGER.debug("Webhooks endpoint check failed (ignoring): %s", e)
+
+                _LOGGER.error(
+                    "Authentication checks failed; token or permissions may be invalid"
+                )
+                return False
 
             except Exception as e:
                 _LOGGER.error("Connection test failed: %s", e)
